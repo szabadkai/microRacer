@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MicroRacer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameContainer {
+            text-align: center;
+        }
+        
+        #gameCanvas {
+            border: 2px solid #fff;
+            background-color: #333;
+        }
+        
+        #controls {
+            color: white;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <h1 style="color: white;">MicroRacer</h1>
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>
+        <div id="controls">
+            Use WASD or Arrow Keys to control your car
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
