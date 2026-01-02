@@ -1,45 +1,268 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MicroRacer</title>
     <style>
-        body {
+        * {
             margin: 0;
-            padding: 20px;
-            background-color: #222;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
         }
-        
+
         #gameContainer {
             text-align: center;
+            width: 100%;
+            height: 100%;
         }
-        
+
         #gameCanvas {
-            border: 2px solid #fff;
+            border: 3px solid #333;
+            border-radius: 8px;
             background-color: #333;
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
         }
-        
-        #controls {
+
+        /* Menu Styles */
+        #menuScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+            padding: 3rem;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 50%, #f472b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+            margin-top: -1rem;
+        }
+
+        .section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.1rem;
+        }
+
+        .player-buttons {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .player-btn {
+            width: 56px;
+            height: 56px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
             color: white;
-            margin-top: 10px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .player-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .player-btn.active {
+            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+            border-color: transparent;
+        }
+
+        .start-btn {
+            padding: 1rem 3rem;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.5);
+        }
+
+        .controls-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .player-label {
+            color: #00d4ff;
+            font-weight: 600;
+            min-width: 70px;
+        }
+
+        .keys {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+
+        .track-selector {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.1);
+        }
+
+        .track-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 180px;
+        }
+
+        .track-number {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+        }
+
+        .track-name {
+            color: #00d4ff;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* Back button during game */
+        #backBtn {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            padding: 0.5rem 1rem;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            display: none;
+            z-index: 100;
+        }
+
+        #backBtn:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
     </style>
 </head>
+
 <body>
     <div id="gameContainer">
-        <h1 style="color: white;">MicroRacer</h1>
-        <canvas id="gameCanvas" width="1200" height="800"></canvas>
-        <div id="controls">
-            Use WASD or Arrow Keys to control your car
+        <!-- Menu Screen -->
+        <div id="menuScreen">
+            <h1>microRacer</h1>
+            <p class="subtitle">Top-down arcade racing</p>
+
+            <div class="section">
+                <label>Select Players</label>
+                <div class="player-buttons">
+                    <button class="player-btn active" data-players="1">1</button>
+                    <button class="player-btn" data-players="2">2</button>
+                    <button class="player-btn" data-players="3">3</button>
+                    <button class="player-btn" data-players="4">4</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <label>Select Track</label>
+                <div class="track-selector">
+                    <button class="nav-btn" id="prevTrack">◀</button>
+                    <div class="track-display">
+                        <span class="track-number" id="trackNumber">1/10</span>
+                        <span class="track-name" id="trackName">Breakfast Table</span>
+                    </div>
+                    <button class="nav-btn" id="nextTrack">▶</button>
+                </div>
+            </div>
+
+            <button class="start-btn" id="startBtn">Start Race</button>
+
+            <div class="controls-info" id="controlsInfo">
+                <div class="control-item">
+                    <span class="player-label">Player 1</span>
+                    <span class="keys">↑ ↓ ← →</span>
+                </div>
+            </div>
         </div>
+
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas" width="1200" height="800"></canvas>
+        <button id="backBtn">← Menu</button>
     </div>
-    
+
+    <!-- Background Music - plays random action track -->
+    <audio id="bgMusic" preload="auto"></audio>
+
     <script src="game.js"></script>
 </body>
+
 </html>
