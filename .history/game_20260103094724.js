@@ -299,7 +299,7 @@ class Car {
         this.x += Math.cos(this.angle - Math.PI / 2) * this.speed;
         this.y += Math.sin(this.angle - Math.PI / 2) * this.speed;
 
-        const grassFriction = 0.82;
+        const grassFriction = 0.86;
         const asphaltFriction = 0.92;
         const frictionBlend =
             asphaltFriction * this.tiresOnTrackRatio +

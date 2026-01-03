@@ -299,8 +299,8 @@ class Car {
         this.x += Math.cos(this.angle - Math.PI / 2) * this.speed;
         this.y += Math.sin(this.angle - Math.PI / 2) * this.speed;
 
-        const grassFriction = 0.82;
-        const asphaltFriction = 0.92;
+        const grassFriction = 0.7;
+        const asphaltFriction = 0.95;
         const frictionBlend =
             asphaltFriction * this.tiresOnTrackRatio +
             grassFriction * (1.0 - this.tiresOnTrackRatio);
@@ -313,7 +313,7 @@ class Car {
     }
 
     getCurrentMaxSpeed() {
-        const speedReduction = (1.0 - this.tiresOnTrackRatio) * 0.04;
+        const speedReduction = (1.0 - this.tiresOnTrackRatio) * 0.1;
         return this.maxSpeedAsphalt * (1.0 - speedReduction);
     }
 
@@ -1211,7 +1211,6 @@ class Game {
         this.handleInput();
 
         this.cars.forEach((car) => {
-            car.tiresOnTrackRatio = this.track.checkCarOnTrack(car);
             car.update();
             this.checkCheckpoint(car);
             this.checkLapCompletion(car);
@@ -1283,6 +1282,9 @@ class Game {
 
             // Draw track
             this.drawTrack();
+
+            // Check tire positions for this car (distance-based, no pixel sampling)
+            car.tiresOnTrackRatio = this.track.checkCarOnTrack(car);
 
             // Draw all cars
             this.cars.forEach((c) => c.draw(this.ctx));
