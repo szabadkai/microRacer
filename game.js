@@ -277,6 +277,105 @@ function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
+// Gamepad Manager for controller support
+class GamepadManager {
+    constructor() {
+        this.gamepads = {};
+        this.deadzone = 0.15;
+        
+        window.addEventListener("gamepadconnected", (e) => {
+            console.log(`Gamepad connected: ${e.gamepad.id}`);
+            this.gamepads[e.gamepad.index] = e.gamepad;
+        });
+        
+        window.addEventListener("gamepaddisconnected", (e) => {
+            console.log(`Gamepad disconnected: ${e.gamepad.id}`);
+            delete this.gamepads[e.gamepad.index];
+        });
+    }
+    
+    // Poll gamepads (must be called each frame as gamepad state isn't event-driven)
+    poll() {
+        const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                this.gamepads[i] = gamepads[i];
+            }
+        }
+    }
+    
+    getGamepad(index) {
+        this.poll();
+        return this.gamepads[index] || null;
+    }
+    
+    getConnectedCount() {
+        this.poll();
+        return Object.keys(this.gamepads).filter(k => this.gamepads[k]).length;
+    }
+    
+    getConnectedIndices() {
+        this.poll();
+        return Object.keys(this.gamepads)
+            .filter(k => this.gamepads[k])
+            .map(k => parseInt(k));
+    }
+    
+    // Get steering input (-1 to 1) from left stick or d-pad
+    getSteerInput(gamepadIndex) {
+        const gamepad = this.getGamepad(gamepadIndex);
+        if (!gamepad) return 0;
+        
+        // Left stick X axis (usually axis 0)
+        let steer = gamepad.axes[0] || 0;
+        
+        // Apply deadzone
+        if (Math.abs(steer) < this.deadzone) steer = 0;
+        
+        // Also check d-pad (buttons 14=left, 15=right on standard mapping)
+        if (gamepad.buttons[14]?.pressed) steer = -1;
+        if (gamepad.buttons[15]?.pressed) steer = 1;
+        
+        return steer;
+    }
+    
+    // Get acceleration input (0 to 1) from right trigger or A button
+    getAccelInput(gamepadIndex) {
+        const gamepad = this.getGamepad(gamepadIndex);
+        if (!gamepad) return 0;
+        
+        // Right trigger (button 7) or A button (button 0)
+        const trigger = gamepad.buttons[7]?.value || 0;
+        const aButton = gamepad.buttons[0]?.pressed ? 1 : 0;
+        
+        return Math.max(trigger, aButton);
+    }
+    
+    // Get brake input (0 to 1) from left trigger or B button
+    getBrakeInput(gamepadIndex) {
+        const gamepad = this.getGamepad(gamepadIndex);
+        if (!gamepad) return 0;
+        
+        // Left trigger (button 6) or B button (button 1)
+        const trigger = gamepad.buttons[6]?.value || 0;
+        const bButton = gamepad.buttons[1]?.pressed ? 1 : 0;
+        
+        return Math.max(trigger, bButton);
+    }
+    
+    // Check if any button is pressed (for menu navigation)
+    isAnyButtonPressed(gamepadIndex) {
+        const gamepad = this.getGamepad(gamepadIndex);
+        if (!gamepad) return false;
+        
+        return gamepad.buttons.some(b => b.pressed);
+    }
+}
+
+// Global gamepad manager
+const gamepadManager = new GamepadManager();
+
+
 // Car Images - SVG cartoon cars
 // Structure: CarImages[style][colorHex] = ImageObject
 const CarImages = {
@@ -760,28 +859,29 @@ class Track {
             {
                 name: "Breakfast Table",
                 background: {
-                    base: "#f4e6d2",
+                    base: "#1a3d1a",
                     pattern: {
-                        type: "dots",
-                        fg: "#ead7c2",
-                        size: 40,
-                        alpha: 0.45,
+                        type: "tartan",
+                        fg: "#0d2610",
+                        fg2: "#2a5c2a",
+                        size: 48,
+                        alpha: 0.5,
                     },
                 },
                 track: {
-                    base: "#b57a45",
-                    edge: "#7e4f2d",
-                    stripe: "#fff3de",
+                    base: "#3a3a3a",
+                    edge: "#2a2a2a",
+                    stripe: "#ffffff",
                     dash: [18, 10],
                     texture: {
-                        type: "grain",
-                        fg: "#c58d5a",
-                        size: 16,
-                        alpha: 0.35,
+                        type: "speckles",
+                        fg: "#4a4a4a",
+                        size: 28,
+                        alpha: 0.3,
                     },
                 },
-                checkpoint: "#ffd24a",
-                vehicle: { shape: "roadster" },
+                checkpoint: "#ffcc00",
+                vehicle: { shape: "formula" },
             },
             {
                 name: "Pool Table",
@@ -816,7 +916,7 @@ class Track {
                     pattern: {
                         type: "grid",
                         fg: "#c6beb3",
-                        size: 36,
+                        size: 48,
                         alpha: 0.5,
                     },
                 },
@@ -842,7 +942,7 @@ class Track {
                     pattern: {
                         type: "speckles",
                         fg: "#5a7648",
-                        size: 28,
+                        size: 44,
                         alpha: 0.45,
                     },
                 },
@@ -854,7 +954,7 @@ class Track {
                     texture: {
                         type: "speckles",
                         fg: "#9a7347",
-                        size: 18,
+                        size: 28,
                         alpha: 0.4,
                     },
                 },
@@ -906,7 +1006,7 @@ class Track {
                     texture: {
                         type: "grain",
                         fg: "#6b4b30",
-                        size: 18,
+                        size: 28,
                         alpha: 0.4,
                     },
                 },
@@ -958,7 +1058,7 @@ class Track {
                     texture: {
                         type: "dots",
                         fg: "#ff966d",
-                        size: 18,
+                        size: 26,
                         alpha: 0.4,
                     },
                 },
@@ -984,8 +1084,8 @@ class Track {
                     texture: {
                         type: "speckles",
                         fg: "#90959b",
-                        size: 16,
-                        alpha: 0.45,
+                        size: 28,
+                        alpha: 0.4,
                     },
                 },
                 checkpoint: "#ffdd77",
@@ -1010,8 +1110,8 @@ class Track {
                     texture: {
                         type: "speckles",
                         fg: "#d34a2f",
-                        size: 14,
-                        alpha: 0.4,
+                        size: 26,
+                        alpha: 0.35,
                     },
                 },
                 checkpoint: "#ffe7a1",
@@ -1177,25 +1277,96 @@ class Track {
     }
 
     getTrackPoint(t) {
-        const segmentIndex = Math.floor(t * (this.points.length - 1));
-        const nextIndex = (segmentIndex + 1) % (this.points.length - 1);
-        const localT = t * (this.points.length - 1) - segmentIndex;
+        const totalSegments = this.points.length - 1;
+        const segmentIndex = Math.floor(t * totalSegments);
+        const index = segmentIndex % totalSegments; // 0 to 27
+        const u = t * totalSegments - segmentIndex;
+        
+        // Map index to control point index (1-based relative to points[0])
+        // The track is drawn using points[1]..points[N] as control points
+        // Segment 0 uses points[1] as control
+        const i = index + 1;
+        
+        let start, control, end;
+        
+        control = this.points[i];
+        
+        if (index === 0) {
+            // First segment: P[0] -> P[1] -> Mid(P[1], P[2])
+            start = this.points[0];
+            end = {
+                x: (this.points[1].x + this.points[2].x) / 2,
+                y: (this.points[1].y + this.points[2].y) / 2
+            };
+        } else if (index === totalSegments - 1) {
+            // Last segment: Mid(P[N-1], P[N]) -> P[N] -> P[0]
+            start = {
+                x: (this.points[i-1].x + this.points[i].x) / 2,
+                y: (this.points[i-1].y + this.points[i].y) / 2
+            };
+            end = this.points[0]; // Closes loop exactly
+        } else {
+            // Middle segments: Mid -> Control -> Mid
+            start = {
+                x: (this.points[i-1].x + this.points[i].x) / 2,
+                y: (this.points[i-1].y + this.points[i].y) / 2
+            };
+            end = {
+                x: (this.points[i].x + this.points[i+1].x) / 2,
+                y: (this.points[i].y + this.points[i+1].y) / 2
+            };
+        }
 
-        const p1 = this.points[segmentIndex];
-        const p2 = this.points[nextIndex];
-
+        // Quadratic Bezier Interpolation
+        // P(t) = (1-u)^2 S + 2(1-u)u C + u^2 E
+        const u1 = 1 - u;
         return {
-            x: p1.x + (p2.x - p1.x) * localT,
-            y: p1.y + (p2.y - p1.y) * localT,
+            x: u1 * u1 * start.x + 2 * u1 * u * control.x + u * u * end.x,
+            y: u1 * u1 * start.y + 2 * u1 * u * control.y + u * u * end.y
         };
     }
 
     getTrackDirection(t) {
-        const epsilon = 0.001;
-        const p1 = this.getTrackPoint(Math.max(0, t - epsilon));
-        const p2 = this.getTrackPoint(Math.min(1, t + epsilon));
+        // Analytical derivative of Quadratic Bezier
+        // P'(t) = 2(1-u)(C - S) + 2u(E - C)
+        const totalSegments = this.points.length - 1;
+        const segmentIndex = Math.floor(t * totalSegments);
+        const index = segmentIndex % totalSegments;
+        const u = t * totalSegments - segmentIndex;
+        
+        const i = index + 1;
+        
+        let start, control, end;
+        control = this.points[i];
+        
+        if (index === 0) {
+            start = this.points[0];
+            end = {
+                x: (this.points[1].x + this.points[2].x) / 2,
+                y: (this.points[1].y + this.points[2].y) / 2
+            };
+        } else if (index === totalSegments - 1) {
+            start = {
+                x: (this.points[i-1].x + this.points[i].x) / 2,
+                y: (this.points[i-1].y + this.points[i].y) / 2
+            };
+            end = this.points[0];
+        } else {
+            start = {
+                x: (this.points[i-1].x + this.points[i].x) / 2,
+                y: (this.points[i-1].y + this.points[i].y) / 2
+            };
+            end = {
+                x: (this.points[i].x + this.points[i+1].x) / 2,
+                y: (this.points[i].y + this.points[i+1].y) / 2
+            };
+        }
 
-        return Math.atan2(p2.y - p1.y, p2.x - p1.x);
+        const u1 = 1 - u;
+        const dx = 2 * u1 * (control.x - start.x) + 2 * u * (end.x - control.x);
+        const dy = 2 * u1 * (control.y - start.y) + 2 * u * (end.y - control.y);
+        
+        return Math.atan2(dy, dx);
     }
 
     // Check if a point is on the track using distance calculation (more reliable than pixel sampling)
@@ -1246,7 +1417,7 @@ class Track {
 }
 
 class Game {
-    constructor(playerCount = 1, trackIndex = 0, settings = {}) {
+    constructor(playerCount = 1, trackIndex = 0, settings = {}, controllerConfig = []) {
         this.playerCount = playerCount;
         this.trackIndex = trackIndex;
         this.canvas = document.getElementById("gameCanvas");
@@ -1289,7 +1460,11 @@ class Game {
         // Player colors
         this.playerColors = ["#ff4444", "#4444ff", "#44ff44", "#ffff44"];
 
-        // Key mappings for each player
+        // Controller configuration: array where each index is a player
+        // null = keyboard, number = gamepad index
+        this.controllerConfig = controllerConfig;
+
+        // Key mappings for each player (used when not using controller)
         this.keyMaps = [
             {
                 up: "arrowup",
@@ -1451,24 +1626,51 @@ class Game {
         if (this.countdownActive) return;
 
         this.cars.forEach((car, index) => {
-            const keyMap = this.keyMaps[index];
-            const steerInput =
-                (this.keys[keyMap.right] ? 1 : 0) -
-                (this.keys[keyMap.left] ? 1 : 0);
-            car.steerInput = steerInput;
+            const gamepadIndex = this.controllerConfig[index];
+            
+            // Check if this player is using a controller
+            if (gamepadIndex !== null && gamepadIndex !== undefined) {
+                // Gamepad input
+                const steerInput = gamepadManager.getSteerInput(gamepadIndex);
+                const accelInput = gamepadManager.getAccelInput(gamepadIndex);
+                const brakeInput = gamepadManager.getBrakeInput(gamepadIndex);
+                
+                car.steerInput = steerInput;
+                
+                if (accelInput > 0.1) {
+                    car.speed = Math.min(
+                        car.speed + car.acceleration * accelInput,
+                        car.getCurrentMaxSpeed()
+                    );
+                }
+                
+                if (brakeInput > 0.1) {
+                    car.speed = Math.max(
+                        car.speed - car.acceleration * brakeInput,
+                        -car.getCurrentMaxSpeed() * 0.5
+                    );
+                }
+            } else {
+                // Keyboard input
+                const keyMap = this.keyMaps[index];
+                const steerInput =
+                    (this.keys[keyMap.right] ? 1 : 0) -
+                    (this.keys[keyMap.left] ? 1 : 0);
+                car.steerInput = steerInput;
 
-            if (this.keys[keyMap.up]) {
-                car.speed = Math.min(
-                    car.speed + car.acceleration,
-                    car.getCurrentMaxSpeed()
-                );
-            }
+                if (this.keys[keyMap.up]) {
+                    car.speed = Math.min(
+                        car.speed + car.acceleration,
+                        car.getCurrentMaxSpeed()
+                    );
+                }
 
-            if (this.keys[keyMap.down]) {
-                car.speed = Math.max(
-                    car.speed - car.acceleration,
-                    -car.getCurrentMaxSpeed() * 0.5
-                );
+                if (this.keys[keyMap.down]) {
+                    car.speed = Math.max(
+                        car.speed - car.acceleration,
+                        -car.getCurrentMaxSpeed() * 0.5
+                    );
+                }
             }
         });
     }
@@ -1818,6 +2020,43 @@ class Game {
                 }
                 break;
             }
+            case "tartan": {
+                // Classic tartan/plaid crosshatch pattern for racing tracks
+                const lineWidth = Math.max(2, size * 0.08);
+                const spacing = size / 4;
+                
+                // Draw vertical stripes
+                ctx.fillStyle = pattern.fg;
+                for (let x = 0; x < size; x += spacing) {
+                    ctx.fillRect(x, 0, lineWidth, size);
+                }
+                
+                // Draw horizontal stripes
+                for (let y = 0; y < size; y += spacing) {
+                    ctx.fillRect(0, y, size, lineWidth);
+                }
+                
+                // Draw secondary accent stripes (offset)
+                if (pattern.fg2) {
+                    ctx.fillStyle = pattern.fg2;
+                    const offset = spacing / 2;
+                    for (let x = offset; x < size; x += spacing) {
+                        ctx.fillRect(x, 0, lineWidth * 0.6, size);
+                    }
+                    for (let y = offset; y < size; y += spacing) {
+                        ctx.fillRect(0, y, size, lineWidth * 0.6);
+                    }
+                }
+                
+                // Add crosshatch intersections for depth
+                ctx.fillStyle = pattern.fg;
+                for (let x = 0; x < size; x += spacing) {
+                    for (let y = 0; y < size; y += spacing) {
+                        ctx.fillRect(x - lineWidth/2, y - lineWidth/2, lineWidth * 1.5, lineWidth * 1.5);
+                    }
+                }
+                break;
+            }
             default:
                 break;
         }
@@ -1933,10 +2172,12 @@ class Game {
             ctx.fill();
         }
 
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 18px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText(label, centerX, topY + 45);
+        if (label === "GO") {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 18px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(label, centerX, topY + 45);
+        }
         ctx.textAlign = "left";
         ctx.restore();
     }
@@ -2018,7 +2259,7 @@ class Game {
         this.ctx.translate(startPoint.x, startPoint.y);
         this.ctx.rotate(direction + Math.PI / 2);
 
-        const finishLineWidth = this.track.width * 1.1;
+        const finishLineWidth = this.track.width;
         const segments = 12;
         const segmentWidth = finishLineWidth / segments;
 
@@ -2041,7 +2282,7 @@ class Game {
         this.ctx.translate(checkpointPoint.x, checkpointPoint.y);
         this.ctx.rotate(direction + Math.PI / 2);
 
-        const checkpointWidth = this.track.width * 1.1;
+        const checkpointWidth = this.track.width;
 
         this.ctx.strokeStyle = this.trackTheme.checkpoint;
         this.ctx.lineWidth = 6;
@@ -2288,17 +2529,65 @@ function initMenu() {
         { player: "Player 4", keys: "8 4 5 6 (Numpad)" },
     ];
 
+    // Controller configuration: null = keyboard, number = gamepad index
+    const playerControllerConfig = [null, null, null, null];
+    
+    // Track which gamepad indices are already assigned
+    function getAvailableGamepads() {
+        const connectedIndices = gamepadManager.getConnectedIndices();
+        const usedIndices = playerControllerConfig.filter(c => c !== null);
+        return connectedIndices.filter(i => !usedIndices.includes(i));
+    }
+
     function updateControlsInfo() {
         controlsInfo.innerHTML = "";
         for (let i = 0; i < selectedPlayers; i++) {
             const div = document.createElement("div");
             div.className = "control-item";
+            div.dataset.playerIndex = i;
+            
+            const isController = playerControllerConfig[i] !== null;
+            if (isController) {
+                div.classList.add("controller-mode");
+            }
+            
+            const inputLabel = isController 
+                ? `🎮 Gamepad ${playerControllerConfig[i] + 1}`
+                : controlsData[i].keys;
+            
             div.innerHTML = `
                 <span class="player-label">${controlsData[i].player}</span>
-                <span class="keys">${controlsData[i].keys}</span>
+                <span class="keys">${inputLabel}</span>
             `;
+            
+            // Add click handler to toggle controller
+            div.addEventListener("click", () => {
+                togglePlayerController(i);
+            });
+            
             controlsInfo.appendChild(div);
         }
+    }
+    
+    function togglePlayerController(playerIndex) {
+        if (playerControllerConfig[playerIndex] !== null) {
+            // Currently using controller, switch to keyboard
+            playerControllerConfig[playerIndex] = null;
+        } else {
+            // Currently using keyboard, try to assign a controller
+            const available = getAvailableGamepads();
+            if (available.length > 0) {
+                playerControllerConfig[playerIndex] = available[0];
+            } else {
+                // No controllers available, poll once to check for new ones
+                gamepadManager.poll();
+                const newAvailable = getAvailableGamepads();
+                if (newAvailable.length > 0) {
+                    playerControllerConfig[playerIndex] = newAvailable[0];
+                }
+            }
+        }
+        updateControlsInfo();
     }
 
     function updateTrackDisplay() {
@@ -2376,7 +2665,8 @@ function initMenu() {
         currentGame = new Game(
             selectedPlayers,
             selectedTrack,
-            gameSettings
+            gameSettings,
+            playerControllerConfig.slice(0, selectedPlayers)
         );
         currentGame.start();
     });
