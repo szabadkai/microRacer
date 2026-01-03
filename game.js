@@ -299,6 +299,7 @@ class Car {
         this.onGrass = false;
         this.turnSpeed = 0;
         this.maxTurnSpeed = 4;
+        this.steerInput = 0;
         this.angle = startAngle;
         this.color = color;
         this.playerIndex = playerIndex;
@@ -316,6 +317,7 @@ class Car {
         this.lapStartTime = Date.now();
         this.currentLapTime = 0;
         this.bestLapTime = null;
+        this.slipstreamEndTime = 0;
     }
 
     getSpeedKmh() {
@@ -342,8 +344,16 @@ class Car {
             grassFriction * (1.0 - this.tiresOnTrackRatio);
         this.speed *= frictionBlend;
 
-        this.turnSpeed *= 0.8;
-        this.angle += this.turnSpeed * 0.02;
+        const speedRatio = this.getSpeedRatio();
+        const steerFactor = Math.max(0.6, 1.2 - speedRatio * 0.6);
+        const tractionFactor = 0.6 + 0.4 * this.tiresOnTrackRatio;
+        const targetTurn =
+            this.steerInput * this.maxTurnSpeed * steerFactor * tractionFactor;
+        this.turnSpeed += (targetTurn - this.turnSpeed) * 0.25;
+
+        const direction = this.speed < -0.5 ? -1 : 1;
+        const turnScale = 0.35 + speedRatio * 0.75;
+        this.angle += this.turnSpeed * 0.02 * direction * turnScale;
 
         this.currentLapTime = Date.now() - this.lapStartTime;
     }
@@ -1100,6 +1110,11 @@ class Game {
         this.countdownStartTime = 0;
         this.countdownEndTime = null;
         this.countdownDuration = 3500;
+        this.slipstreamDistance = 140;
+        this.slipstreamAngle = Math.PI / 6;
+        this.slipstreamDuration = 450;
+        this.slipstreamBoostAccel = 0.45;
+        this.slipstreamMaxFactor = 1.08;
         this.ghostCar = new Car(
             0,
             0,
@@ -1275,6 +1290,10 @@ class Game {
 
         this.cars.forEach((car, index) => {
             const keyMap = this.keyMaps[index];
+            const steerInput =
+                (this.keys[keyMap.right] ? 1 : 0) -
+                (this.keys[keyMap.left] ? 1 : 0);
+            car.steerInput = steerInput;
 
             if (this.keys[keyMap.up]) {
                 car.speed = Math.min(
@@ -1288,17 +1307,6 @@ class Game {
                     car.speed - car.acceleration,
                     -car.getCurrentMaxSpeed() * 0.5
                 );
-            }
-
-            if (this.keys[keyMap.left]) {
-                car.turnSpeed = Math.max(
-                    car.turnSpeed - 0.3,
-                    -car.maxTurnSpeed
-                );
-            }
-
-            if (this.keys[keyMap.right]) {
-                car.turnSpeed = Math.min(car.turnSpeed + 0.3, car.maxTurnSpeed);
             }
         });
     }
@@ -1393,6 +1401,20 @@ class Game {
             this.checkCheckpoint(car);
             this.recordLapSample(car, index);
             this.checkLapCompletion(car, index);
+        });
+
+        this.applySlipstream();
+
+        const now = Date.now();
+        this.cars.forEach((car) => {
+            if (now < car.slipstreamEndTime && car.speed > 0) {
+                const maxBoostSpeed =
+                    car.getCurrentMaxSpeed() * this.slipstreamMaxFactor;
+                car.speed = Math.min(
+                    car.speed + this.slipstreamBoostAccel,
+                    maxBoostSpeed
+                );
+            }
         });
 
         this.resolveCarCollisions();
@@ -1956,6 +1978,36 @@ class Game {
                     Math.min(carB.speed, carB.getCurrentMaxSpeed()),
                     -carB.getCurrentMaxSpeed() * 0.5
                 );
+            }
+        }
+    }
+
+    applySlipstream() {
+        const now = Date.now();
+        const minDot = Math.cos(this.slipstreamAngle);
+
+        for (let i = 0; i < this.cars.length; i++) {
+            const car = this.cars[i];
+            const forwardX = Math.cos(car.angle - Math.PI / 2);
+            const forwardY = Math.sin(car.angle - Math.PI / 2);
+
+            for (let j = 0; j < this.cars.length; j++) {
+                if (i === j) continue;
+                const target = this.cars[j];
+                if (Math.abs(target.speed) < 0.5) continue;
+
+                const dx = target.x - car.x;
+                const dy = target.y - car.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > this.slipstreamDistance || dist === 0) continue;
+
+                const dirX = dx / dist;
+                const dirY = dy / dist;
+                const aheadDot = forwardX * dirX + forwardY * dirY;
+                if (aheadDot < minDot) continue;
+
+                car.slipstreamEndTime = now + this.slipstreamDuration;
+                break;
             }
         }
     }
