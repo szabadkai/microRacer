@@ -229,15 +229,16 @@ const soundManager = new SoundManager();
 
 class Car {
     constructor(x, y, startAngle = 0, color = '#ff4444', playerIndex = 0) {
+        const speedScale = 0.75;
         this.x = x;
         this.y = y;
         this.width = 20;
         this.height = 40;
         this.speed = 0;
-        this.maxSpeedAsphalt = 300;  // Fast for arcade feel
+        this.maxSpeedAsphalt = 300 * speedScale;  // Fast for arcade feel
         this.tiresOnTrackRatio = 1.0;
-        this.acceleration = 0.6;
-        this.deceleration = 0.3;
+        this.acceleration = 0.6 * speedScale;
+        this.deceleration = 0.3 * speedScale;
         this.onGrass = false;
         this.turnSpeed = 0;
         this.maxTurnSpeed = 4;
