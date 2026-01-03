@@ -236,10 +236,46 @@ class SoundManager {
         }
         return this.sfxEnabled;
     }
+
+    setMusicEnabled(enabled) {
+        this.musicEnabled = enabled;
+        if (!this.musicEnabled) {
+            this.stopMusic();
+        } else if (this.initialized) {
+            this.startMusic();
+        }
+    }
+
+    setSfxEnabled(enabled) {
+        this.sfxEnabled = enabled;
+        if (!this.sfxEnabled) {
+            this.stopEngineSound();
+        }
+    }
 }
 
 // Global sound manager
 const soundManager = new SoundManager();
+
+const SETTINGS_KEY = "microRacer.settings";
+const defaultSettings = {
+    ghostEnabled: true,
+    musicEnabled: true,
+    sfxEnabled: true,
+};
+
+function loadSettings() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+        return { ...defaultSettings, ...(stored || {}) };
+    } catch (e) {
+        return { ...defaultSettings };
+    }
+}
+
+function saveSettings(settings) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
 
 class Car {
     constructor(
@@ -300,7 +336,7 @@ class Car {
         this.y += Math.sin(this.angle - Math.PI / 2) * this.speed;
 
         const grassFriction = 0.82;
-        const asphaltFriction = 0.92;
+        const asphaltFriction = 0.95;
         const frictionBlend =
             asphaltFriction * this.tiresOnTrackRatio +
             grassFriction * (1.0 - this.tiresOnTrackRatio);
@@ -1038,7 +1074,7 @@ class Track {
 }
 
 class Game {
-    constructor(playerCount = 1, trackIndex = 0) {
+    constructor(playerCount = 1, trackIndex = 0, settings = {}) {
         this.playerCount = playerCount;
         this.trackIndex = trackIndex;
         this.canvas = document.getElementById("gameCanvas");
@@ -1051,6 +1087,27 @@ class Game {
         this.running = false;
         this.winner = null;
         this.lapsToWin = 3;
+        this.ghostEnabled = settings.ghostEnabled !== false;
+        this.lapSamples = Array.from({ length: this.playerCount }, () => []);
+        this.lastSampleTimes = Array(this.playerCount).fill(0);
+        this.bestLap = this.loadBestLap();
+        this.ghostSamples = this.bestLap ? this.bestLap.samples : null;
+        this.ghostLapTime = this.bestLap ? this.bestLap.time : null;
+        this.ghostStartTime = Date.now();
+        this.ghostCursor = 0;
+        this.ghostLastTime = 0;
+        this.countdownActive = false;
+        this.countdownStartTime = 0;
+        this.countdownEndTime = null;
+        this.countdownDuration = 3500;
+        this.ghostCar = new Car(
+            0,
+            0,
+            0,
+            "#ffffff",
+            -1,
+            this.trackTheme.vehicle || {}
+        );
 
         // Player colors
         this.playerColors = ["#ff4444", "#4444ff", "#44ff44", "#ffff44"];
@@ -1074,6 +1131,96 @@ class Game {
 
         this.initCars();
         this.setupEventListeners();
+    }
+
+    getBestLapStorageKey() {
+        return `microRacer.bestLap.${this.trackIndex}`;
+    }
+
+    loadBestLap() {
+        try {
+            const stored = JSON.parse(
+                localStorage.getItem(this.getBestLapStorageKey())
+            );
+            if (!stored || !stored.time || !Array.isArray(stored.samples)) {
+                return null;
+            }
+            return stored;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    saveBestLap(bestLap) {
+        localStorage.setItem(
+            this.getBestLapStorageKey(),
+            JSON.stringify(bestLap)
+        );
+    }
+
+    recordLapSample(car, index) {
+        const sampleTime = car.currentLapTime;
+        if (sampleTime - this.lastSampleTimes[index] < 30) return;
+        this.lastSampleTimes[index] = sampleTime;
+        this.lapSamples[index].push({
+            t: sampleTime,
+            x: car.x,
+            y: car.y,
+            angle: car.angle,
+        });
+    }
+
+    setBestLap(lapTime, lapSamples) {
+        const samples = lapSamples.map((sample) => ({ ...sample }));
+        const bestLap = { time: lapTime, samples };
+        this.bestLap = bestLap;
+        this.ghostSamples = samples;
+        this.ghostLapTime = lapTime;
+        this.ghostStartTime = Date.now();
+        this.ghostCursor = 0;
+        this.ghostLastTime = 0;
+        this.saveBestLap(bestLap);
+    }
+
+    interpolateAngle(a, b, t) {
+        const twoPi = Math.PI * 2;
+        const delta = ((b - a + Math.PI * 3) % twoPi) - Math.PI;
+        return a + delta * t;
+    }
+
+    getGhostSampleAt(sampleTime) {
+        if (!this.ghostSamples || this.ghostSamples.length === 0) return null;
+
+        if (sampleTime < this.ghostLastTime) {
+            this.ghostCursor = 0;
+        }
+        this.ghostLastTime = sampleTime;
+
+        const samples = this.ghostSamples;
+        let index = this.ghostCursor;
+
+        while (index < samples.length - 1 && samples[index + 1].t < sampleTime) {
+            index++;
+        }
+
+        this.ghostCursor = index;
+        const current = samples[index];
+        const next = samples[Math.min(index + 1, samples.length - 1)];
+
+        if (!next || next.t === current.t) {
+            return current;
+        }
+
+        const ratio = Math.min(
+            Math.max((sampleTime - current.t) / (next.t - current.t), 0),
+            1
+        );
+
+        return {
+            x: current.x + (next.x - current.x) * ratio,
+            y: current.y + (next.y - current.y) * ratio,
+            angle: this.interpolateAngle(current.angle, next.angle, ratio),
+        };
     }
 
     resizeCanvas() {
@@ -1124,6 +1271,8 @@ class Game {
     }
 
     handleInput() {
+        if (this.countdownActive) return;
+
         this.cars.forEach((car, index) => {
             const keyMap = this.keyMaps[index];
 
@@ -1165,7 +1314,7 @@ class Game {
         }
     }
 
-    checkLapCompletion(car) {
+    checkLapCompletion(car, index) {
         const startPoint = this.track.getTrackPoint(0);
         const distance = Math.sqrt(
             (car.x - startPoint.x) ** 2 + (car.y - startPoint.y) ** 2
@@ -1181,6 +1330,23 @@ class Game {
                     // Play lap completion sound
                     soundManager.playLapComplete();
 
+                    this.lapSamples[index].push({
+                        t: car.currentLapTime,
+                        x: car.x,
+                        y: car.y,
+                        angle: car.angle,
+                    });
+
+                    if (
+                        !this.bestLap ||
+                        car.currentLapTime < this.bestLap.time
+                    ) {
+                        this.setBestLap(
+                            car.currentLapTime,
+                            this.lapSamples[index]
+                        );
+                    }
+
                     if (
                         !car.bestLapTime ||
                         car.currentLapTime < car.bestLapTime
@@ -1190,6 +1356,11 @@ class Game {
 
                     car.lapStartTime = Date.now();
                     car.crossedCheckpoint = false;
+                    this.lapSamples[index] = [];
+                    this.lastSampleTimes[index] = 0;
+                    this.ghostStartTime = car.lapStartTime;
+                    this.ghostCursor = 0;
+                    this.ghostLastTime = 0;
 
                     // Check for winner
                     if (car.lap >= this.lapsToWin && !this.winner) {
@@ -1207,14 +1378,21 @@ class Game {
 
     update() {
         if (this.winner) return;
+        if (this.countdownActive) {
+            this.cars.forEach((car) => {
+                car.currentLapTime = 0;
+            });
+            return;
+        }
 
         this.handleInput();
 
-        this.cars.forEach((car) => {
+        this.cars.forEach((car, index) => {
             car.tiresOnTrackRatio = this.track.checkCarOnTrack(car);
             car.update();
             this.checkCheckpoint(car);
-            this.checkLapCompletion(car);
+            this.recordLapSample(car, index);
+            this.checkLapCompletion(car, index);
         });
 
         this.resolveCarCollisions();
@@ -1284,6 +1462,9 @@ class Game {
             // Draw track
             this.drawTrack();
 
+            // Draw ghost lap
+            this.drawGhost();
+
             // Draw all cars
             this.cars.forEach((c) => c.draw(this.ctx));
 
@@ -1308,6 +1489,8 @@ class Game {
                 );
             }
         });
+
+        this.drawCountdownOverlay();
 
         // Draw winner overlay
         if (this.winner) {
@@ -1473,6 +1656,99 @@ class Game {
             this.ctx.fillRect(drawX, drawY, drawW, drawH);
             this.ctx.restore();
         }
+    }
+
+    drawGhost() {
+        if (
+            this.countdownActive ||
+            !this.ghostEnabled ||
+            !this.ghostSamples ||
+            !this.ghostLapTime
+        ) {
+            return;
+        }
+
+        const elapsed = Date.now() - this.ghostStartTime;
+        const sampleTime = elapsed % this.ghostLapTime;
+        const sample = this.getGhostSampleAt(sampleTime);
+        if (!sample) return;
+
+        this.ghostCar.x = sample.x;
+        this.ghostCar.y = sample.y;
+        this.ghostCar.angle = sample.angle;
+
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.45;
+        this.ghostCar.draw(this.ctx);
+        this.ctx.restore();
+    }
+
+    drawCountdownOverlay() {
+        if (!this.countdownActive && !this.countdownEndTime) return;
+
+        const now = Date.now();
+        const elapsed = now - this.countdownStartTime;
+        const showGo =
+            !this.countdownActive &&
+            this.countdownEndTime &&
+            now - this.countdownEndTime < 700;
+
+        if (!this.countdownActive && !showGo) {
+            return;
+        }
+
+        const ctx = this.ctx;
+        const centerX = this.canvas.width / 2;
+        const topY = 30;
+        const lightSpacing = 40;
+        const lightRadius = 12;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(centerX - 90, topY - 10, 180, 50);
+
+        const colors = ["#ff4d4d", "#ffd166", "#4ade80"];
+        const dim = "rgba(255, 255, 255, 0.15)";
+        let label = "";
+        let activeIndex = 0;
+
+        if (this.countdownActive) {
+            if (elapsed < 1000) {
+                label = "3";
+                activeIndex = 0;
+            } else if (elapsed < 2000) {
+                label = "2";
+                activeIndex = 1;
+            } else if (elapsed < 3000) {
+                label = "1";
+                activeIndex = 2;
+            } else {
+                label = "GO";
+                activeIndex = 2;
+            }
+        } else {
+            label = "GO";
+            activeIndex = 2;
+        }
+
+        for (let i = 0; i < 3; i++) {
+            const x = centerX - lightSpacing + i * lightSpacing;
+            const isActive =
+                this.countdownActive && i === activeIndex
+                    ? true
+                    : !this.countdownActive && i === 2;
+            ctx.fillStyle = isActive ? colors[i] : dim;
+            ctx.beginPath();
+            ctx.arc(x, topY + 15, lightRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 18px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(label, centerX, topY + 45);
+        ctx.textAlign = "left";
+        ctx.restore();
     }
 
     drawTrack() {
@@ -1716,8 +1992,28 @@ class Game {
             .padStart(2, "0")}`;
     }
 
+    startCountdown() {
+        this.countdownActive = true;
+        this.countdownStartTime = Date.now();
+        this.countdownEndTime = null;
+
+        soundManager.playCountdown(() => {
+            const now = Date.now();
+            this.countdownActive = false;
+            this.countdownEndTime = now;
+            this.ghostStartTime = now;
+            this.ghostCursor = 0;
+            this.ghostLastTime = 0;
+            this.cars.forEach((car) => {
+                car.lapStartTime = now;
+                car.currentLapTime = 0;
+            });
+        });
+    }
+
     start() {
         this.running = true;
+        this.startCountdown();
         this.gameLoop();
     }
 
@@ -1738,6 +2034,7 @@ class Game {
 let currentGame = null;
 let selectedPlayers = 1;
 let selectedTrack = 0;
+let gameSettings = loadSettings();
 
 const trackNames = [
     "Breakfast Table",
@@ -1754,9 +2051,15 @@ const trackNames = [
 
 function initMenu() {
     const menuScreen = document.getElementById("menuScreen");
+    const settingsScreen = document.getElementById("settingsScreen");
     const gameCanvas = document.getElementById("gameCanvas");
     const backBtn = document.getElementById("backBtn");
     const startBtn = document.getElementById("startBtn");
+    const settingsBtn = document.getElementById("settingsBtn");
+    const settingsBackBtn = document.getElementById("settingsBackBtn");
+    const ghostToggle = document.getElementById("ghostToggle");
+    const musicToggle = document.getElementById("musicToggle");
+    const sfxToggle = document.getElementById("sfxToggle");
     const playerButtons = document.querySelectorAll(".player-btn");
     const controlsInfo = document.getElementById("controlsInfo");
     const prevTrackBtn = document.getElementById("prevTrack");
@@ -1789,6 +2092,10 @@ function initMenu() {
         trackNameEl.textContent = trackNames[selectedTrack];
     }
 
+    ghostToggle.checked = gameSettings.ghostEnabled;
+    musicToggle.checked = gameSettings.musicEnabled;
+    sfxToggle.checked = gameSettings.sfxEnabled;
+
     playerButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
             playerButtons.forEach((b) => b.classList.remove("active"));
@@ -1808,16 +2115,54 @@ function initMenu() {
         updateTrackDisplay();
     });
 
+    settingsBtn.addEventListener("click", () => {
+        menuScreen.style.display = "none";
+        settingsScreen.style.display = "flex";
+    });
+
+    settingsBackBtn.addEventListener("click", () => {
+        settingsScreen.style.display = "none";
+        menuScreen.style.display = "flex";
+    });
+
+    ghostToggle.addEventListener("change", () => {
+        gameSettings.ghostEnabled = ghostToggle.checked;
+        saveSettings(gameSettings);
+    });
+
+    musicToggle.addEventListener("change", () => {
+        gameSettings.musicEnabled = musicToggle.checked;
+        saveSettings(gameSettings);
+        if (currentGame) {
+            soundManager.setMusicEnabled(gameSettings.musicEnabled);
+        }
+    });
+
+    sfxToggle.addEventListener("change", () => {
+        gameSettings.sfxEnabled = sfxToggle.checked;
+        saveSettings(gameSettings);
+        if (currentGame) {
+            soundManager.setSfxEnabled(gameSettings.sfxEnabled);
+        }
+    });
+
     startBtn.addEventListener("click", () => {
         menuScreen.style.display = "none";
+        settingsScreen.style.display = "none";
         gameCanvas.style.display = "block";
         backBtn.style.display = "block";
 
         // Initialize audio on user interaction (required by browsers)
         soundManager.init();
+        soundManager.setMusicEnabled(gameSettings.musicEnabled);
+        soundManager.setSfxEnabled(gameSettings.sfxEnabled);
         soundManager.startMusic();
 
-        currentGame = new Game(selectedPlayers, selectedTrack);
+        currentGame = new Game(
+            selectedPlayers,
+            selectedTrack,
+            gameSettings
+        );
         currentGame.start();
     });
 
@@ -1830,6 +2175,7 @@ function initMenu() {
         soundManager.stopMusic();
         soundManager.stopEngineSound();
 
+        settingsScreen.style.display = "none";
         menuScreen.style.display = "flex";
         gameCanvas.style.display = "none";
         backBtn.style.display = "none";

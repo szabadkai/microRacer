@@ -47,6 +47,8 @@
             align-items: center;
             gap: 2rem;
             padding: 3rem;
+            width: min(90vw, 420px);
+            margin: 0 auto;
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
             border-radius: 24px;
@@ -127,6 +129,25 @@
             box-shadow: 0 0 40px rgba(0, 212, 255, 0.5);
         }
 
+        .secondary-btn {
+            padding: 0.8rem 2.2rem;
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
         .controls-info {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -195,11 +216,87 @@
             font-weight: 600;
         }
 
+        /* Settings Screen */
+        #settingsScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 2.5rem;
+            min-width: 320px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #settingsScreen h2 {
+            color: #00d4ff;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .settings-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            width: 100%;
+        }
+
+        .settings-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+
+        .settings-item label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+        }
+
+        .toggle {
+            appearance: none;
+            width: 52px;
+            height: 28px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .toggle::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #ffffff;
+            transition: transform 0.2s ease;
+        }
+
+        .toggle:checked {
+            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+            border-color: transparent;
+        }
+
+        .toggle:checked::after {
+            transform: translateX(24px);
+        }
+
         /* Back button during game */
         #backBtn {
             position: fixed;
             top: 1rem;
-            left: 1rem;
+            right: 1rem;
             padding: 0.5rem 1rem;
             background: rgba(0, 0, 0, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -246,6 +343,7 @@
             </div>
 
             <button class="start-btn" id="startBtn">Start Race</button>
+            <button class="secondary-btn" id="settingsBtn">Settings</button>
 
             <div class="controls-info" id="controlsInfo">
                 <div class="control-item">
@@ -253,6 +351,26 @@
                     <span class="keys">↑ ↓ ← →</span>
                 </div>
             </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settingsScreen">
+            <h2>Settings</h2>
+            <div class="settings-list">
+                <div class="settings-item">
+                    <label for="ghostToggle">Ghost (fastest lap)</label>
+                    <input class="toggle" type="checkbox" id="ghostToggle">
+                </div>
+                <div class="settings-item">
+                    <label for="musicToggle">Music</label>
+                    <input class="toggle" type="checkbox" id="musicToggle">
+                </div>
+                <div class="settings-item">
+                    <label for="sfxToggle">Sound Effects</label>
+                    <input class="toggle" type="checkbox" id="sfxToggle">
+                </div>
+            </div>
+            <button class="secondary-btn" id="settingsBackBtn">Back</button>
         </div>
 
         <!-- Game Canvas -->
