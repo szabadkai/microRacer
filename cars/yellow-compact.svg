@@ -1,0 +1,24 @@
+<svg width="18" height="34" viewBox="0 0 18 34" xmlns="http://www.w3.org/2000/svg">
+  <!-- Body - compact bubble shape -->
+  <rect x="2" y="5" width="14" height="23" rx="5" fill="#ffdd44"/>
+  
+  <!-- Front bumper with integrated lights -->
+  <ellipse cx="9" cy="6" rx="6" ry="2.5" fill="#ddaa22"/>
+  <circle cx="6" cy="6" r="1.2" fill="#ffff99"/>
+  <circle cx="12" cy="6" r="1.2" fill="#ffff99"/>
+  
+  <!-- Roof -->
+  <rect x="4" y="11" width="10" height="12" rx="3" fill="#ddaa22"/>
+  
+  <!-- Windshield -->
+  <rect x="5" y="12" width="8" height="5" rx="1" fill="#87ceeb"/>
+  
+  <!-- Wheels -->
+  <rect x="-1" y="10" width="4" height="7" rx="1" fill="#222"/>
+  <rect x="15" y="10" width="4" height="7" rx="1" fill="#222"/>
+  <rect x="-1" y="17" width="4" height="7" rx="1" fill="#222"/>
+  <rect x="15" y="17" width="4" height="7" rx="1" fill="#222"/>
+  
+  <!-- Smile detail -->
+  <path d="M 6 30 Q 9 32 12 30" fill="none" stroke="#cc9922" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

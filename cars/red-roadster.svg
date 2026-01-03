@@ -1,0 +1,24 @@
+<svg width="20" height="40" viewBox="0 0 20 40" xmlns="http://www.w3.org/2000/svg">
+  <!-- Body -->
+  <rect x="2" y="4" width="16" height="31" rx="3" fill="#ff4444"/>
+  
+  <!-- Roof -->
+  <rect x="4" y="12" width="12" height="16" rx="2" fill="#cc2222"/>
+  
+  <!-- Windshield -->
+  <rect x="5" y="13" width="10" height="6" rx="1" fill="#87ceeb"/>
+  
+  <!-- Front bumper with integrated headlights -->
+  <rect x="2" y="4" width="16" height="4" rx="2" fill="#cc2222"/>
+  <circle cx="6" cy="5.5" r="1.2" fill="#ffff99"/>
+  <circle cx="14" cy="5.5" r="1.2" fill="#ffff99"/>
+  
+  <!-- Wheels -->
+  <rect x="-1" y="10" width="4" height="7" rx="1" fill="#222"/>
+  <rect x="17" y="10" width="4" height="7" rx="1" fill="#222"/>
+  <rect x="-1" y="25" width="4" height="7" rx="1" fill="#222"/>
+  <rect x="17" y="25" width="4" height="7" rx="1" fill="#222"/>
+  
+  <!-- Racing stripe -->
+  <rect x="8.5" y="8" width="3" height="27" fill="#ffffff" opacity="0.6"/>
+</svg>

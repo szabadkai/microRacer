@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicroRacer</title>
+    <title>microRacer</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <style>
         * {
@@ -310,6 +310,31 @@
         #backBtn:hover {
             background: rgba(255, 255, 255, 0.1);
         }
+
+        /* Finish Screen Button */
+        #finishBackBtn {
+            position: fixed;
+            top: 65%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 1rem 3rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: white;
+            background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            z-index: 101;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        #finishBackBtn:hover {
+            transform: translate(-50%, -50%) scale(1.05);
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.5);
+        }
     </style>
 </head>
 
@@ -317,7 +342,7 @@
     <div id="gameContainer">
         <!-- Menu Screen -->
         <div id="menuScreen">
-            <h1>microRacer</h1>
+            <h1>Benett's microRacer</h1>
             <p class="subtitle">Top-down arcade racing</p>
 
             <div class="section">
@@ -376,6 +401,7 @@
         <!-- Game Canvas -->
         <canvas id="gameCanvas" width="1200" height="800"></canvas>
         <button id="backBtn">← Menu</button>
+        <button id="finishBackBtn">Back to Menu</button>
     </div>
 
     <!-- Background Music - plays random action track -->

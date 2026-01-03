@@ -1,0 +1,24 @@
+<svg width="24" height="46" viewBox="0 0 24 46" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cargo bed -->
+  <rect x="4" y="16" width="16" height="24" rx="2" fill="#44aa44"/>
+  
+  <!-- Cab -->
+  <rect x="5" y="5" width="14" height="14" rx="2" fill="#338833"/>
+  
+  <!-- Front grille with integrated lights -->
+  <rect x="5" y="4" width="14" height="3" rx="1" fill="#226622"/>
+  <circle cx="8" cy="5.5" r="1" fill="#ffff99"/>
+  <circle cx="16" cy="5.5" r="1" fill="#ffff99"/>
+  
+  <!-- Windshield -->
+  <rect x="7" y="8" width="10" height="7" rx="1" fill="#87ceeb"/>
+  
+  <!-- Wheels -->
+  <rect x="-1" y="10" width="5" height="8" rx="1" fill="#222"/>
+  <rect x="20" y="10" width="5" height="8" rx="1" fill="#222"/>
+  <rect x="-1" y="28" width="5" height="8" rx="1" fill="#222"/>
+  <rect x="20" y="28" width="5" height="8" rx="1" fill="#222"/>
+  
+  <!-- Cargo detail -->
+  <rect x="6" y="19" width="12" height="3" fill="#66cc66"/>
+</svg>

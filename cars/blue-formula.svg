@@ -1,0 +1,31 @@
+<svg width="24" height="42" viewBox="0 0 24 42" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rear Wing -->
+  <rect x="2" y="35" width="20" height="5" rx="1" fill="#cc2222"/>
+  
+  <!-- Rear Tires (Wide) -->
+  <rect x="0" y="24" width="6" height="10" rx="2" fill="#333"/>
+  <rect x="18" y="24" width="6" height="10" rx="2" fill="#333"/>
+  
+  <!-- Main Body -->
+  <path d="M 8 10 L 8 36 L 16 36 L 16 10 L 12 4 Z" fill="#dd4444"/>
+  
+  <!-- Side Pods -->
+  <path d="M 6 20 L 6 32 L 8 32 L 8 20 Z" fill="#cc2222"/>
+  <path d="M 16 20 L 16 32 L 18 32 L 18 20 Z" fill="#cc2222"/>
+
+  <!-- Front Tires (Smaller) -->
+  <rect x="1" y="8" width="5" height="8" rx="2" fill="#333"/>
+  <rect x="18" y="8" width="5" height="8" rx="2" fill="#333"/>
+
+  <!-- Front Wing -->
+  <path d="M 2 2 L 22 2 L 22 6 L 18 6 L 12 4 L 6 6 L 2 6 Z" fill="#cc2222"/>
+
+  <!-- Cockpit area -->
+  <rect x="10" y="16" width="4" height="8" rx="2" fill="#333"/>
+  
+  <!-- Driver Helmet -->
+  <circle cx="12" cy="20" r="3" fill="#ffff00"/>
+  
+  <!-- Stripe/Detail -->
+  <rect x="11.5" y="4" width="1" height="10" fill="#ffffff" opacity="0.5"/>
+</svg>

@@ -277,6 +277,150 @@ function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
+// Car Images - SVG cartoon cars
+// Structure: CarImages[style][colorHex] = ImageObject
+const CarImages = {
+    loaded: false,
+};
+
+// Helper: Darken hex color for accents
+function darkenColor(hex, amount = 0.3) {
+    let r = parseInt(hex.substring(1, 3), 16);
+    let g = parseInt(hex.substring(3, 5), 16);
+    let b = parseInt(hex.substring(5, 7), 16);
+
+    r = Math.max(0, Math.floor(r * (1 - amount)));
+    g = Math.max(0, Math.floor(g * (1 - amount)));
+    b = Math.max(0, Math.floor(b * (1 - amount)));
+
+    return `#${r.toString(16).padStart(2, "0")}${g
+        .toString(16)
+        .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+// SVG Templates
+const CarSVGTemplates = {
+    roadster: (c, d) => `
+        <svg width="23" height="43" viewBox="0 0 20 40" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="16" height="31" rx="3" fill="${c}"/>
+            <rect x="4" y="12" width="12" height="16" rx="2" fill="${d}"/>
+            <rect x="5" y="13" width="10" height="6" rx="1" fill="#87ceeb"/>
+            <rect x="2" y="4" width="16" height="4" rx="2" fill="${d}"/>
+            <circle cx="6" cy="5.5" r="1.2" fill="#ffff99"/>
+            <circle cx="14" cy="5.5" r="1.2" fill="#ffff99"/>
+            <rect x="-1" y="10" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="17" y="10" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="-1" y="25" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="17" y="25" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="8.5" y="8" width="3" height="27" fill="#ffffff" opacity="0.6"/>
+        </svg>`,
+    formula: (c, d) => `
+        <svg width="24" height="42" viewBox="0 0 24 42" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="35" width="20" height="5" rx="1" fill="${d}"/>
+            <rect x="0" y="24" width="6" height="10" rx="2" fill="#333"/>
+            <rect x="18" y="24" width="6" height="10" rx="2" fill="#333"/>
+            <path d="M 8 10 L 8 36 L 16 36 L 16 10 L 12 4 Z" fill="${c}"/>
+            <path d="M 6 20 L 6 32 L 8 32 L 8 20 Z" fill="${d}"/>
+            <path d="M 16 20 L 16 32 L 18 32 L 18 20 Z" fill="${d}"/>
+            <rect x="1" y="8" width="5" height="8" rx="2" fill="#333"/>
+            <rect x="18" y="8" width="5" height="8" rx="2" fill="#333"/>
+            <path d="M 2 2 L 22 2 L 22 6 L 18 6 L 12 4 L 6 6 L 2 6 Z" fill="${d}"/>
+            <rect x="10" y="16" width="4" height="8" rx="2" fill="#333"/>
+            <circle cx="12" cy="20" r="3" fill="#ffff00"/>
+            <rect x="11.5" y="4" width="1" height="10" fill="#ffffff" opacity="0.5"/>
+        </svg>`,
+    buggy: (c, d) => `
+        <svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5" y="6" width="16" height="23" rx="2" fill="${c}"/>
+            <rect x="7" y="8" width="12" height="19" rx="2" fill="none" stroke="${d}" stroke-width="2"/>
+            <rect x="3" y="4" width="20" height="2.5" rx="1" fill="${d}"/>
+            <circle cx="8" cy="5" r="1" fill="#ffff99"/>
+            <circle cx="18" cy="5" r="1" fill="#ffff99"/>
+            <circle cx="13" cy="28" r="4" fill="#333"/>
+            <circle cx="13" cy="28" r="2" fill="#666"/>
+            <rect x="-2" y="9" width="6" height="9" rx="2" fill="#222"/>
+            <rect x="22" y="9" width="6" height="9" rx="2" fill="#222"/>
+            <rect x="-2" y="18" width="6" height="9" rx="2" fill="#222"/>
+            <rect x="22" y="18" width="6" height="9" rx="2" fill="#222"/>
+        </svg>`,
+    soapboat: (c, d) => `
+        <svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="18" height="27" rx="8" fill="${c}"/>
+            <ellipse cx="13" cy="5" rx="7" ry="3" fill="${d}"/>
+            <circle cx="9" cy="5" r="1" fill="#ffff99"/>
+            <circle cx="17" cy="5" r="1" fill="#ffff99"/>
+            <rect x="6" y="10" width="14" height="16" rx="6" fill="${d}"/>
+            <circle cx="13" cy="15" r="5" fill="#87ceeb" opacity="0.7"/>
+            <circle cx="13" cy="15" r="3" fill="#ffffff" opacity="0.3"/>
+            <rect x="0" y="10" width="4" height="7" rx="2" fill="#222"/>
+            <rect x="22" y="10" width="4" height="7" rx="2" fill="#222"/>
+            <rect x="0" y="19" width="4" height="7" rx="2" fill="#222"/>
+            <rect x="22" y="19" width="4" height="7" rx="2" fill="#222"/>
+        </svg>`,
+    compact: (c, d) => `
+        <svg width="18" height="34" viewBox="0 0 18 34" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="5" width="14" height="23" rx="5" fill="${c}"/>
+            <ellipse cx="9" cy="6" rx="6" ry="2.5" fill="${d}"/>
+            <circle cx="6" cy="6" r="1.2" fill="#ffff99"/>
+            <circle cx="12" cy="6" r="1.2" fill="#ffff99"/>
+            <rect x="4" y="11" width="10" height="12" rx="3" fill="${d}"/>
+            <rect x="5" y="12" width="8" height="5" rx="1" fill="#87ceeb"/>
+            <rect x="-1" y="10" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="15" y="10" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="-1" y="17" width="4" height="7" rx="1" fill="#222"/>
+            <rect x="15" y="17" width="4" height="7" rx="1" fill="#222"/>
+            <path d="M 6 30 Q 9 32 12 30" fill="none" stroke="${d}" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>`,
+    truck: (c, d) => `
+        <svg width="24" height="46" viewBox="0 0 24 46" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="16" width="16" height="24" rx="2" fill="${c}"/>
+            <rect x="5" y="5" width="14" height="14" rx="2" fill="${d}"/>
+            <rect x="5" y="4" width="14" height="3" rx="1" fill="#224422"/>
+            <circle cx="8" cy="5.5" r="1" fill="#ffff99"/>
+            <circle cx="16" cy="5.5" r="1" fill="#ffff99"/>
+            <rect x="7" y="8" width="10" height="7" rx="1" fill="#87ceeb"/>
+            <rect x="-1" y="10" width="5" height="8" rx="1" fill="#222"/>
+            <rect x="20" y="10" width="5" height="8" rx="1" fill="#222"/>
+            <rect x="-1" y="28" width="5" height="8" rx="1" fill="#222"/>
+            <rect x="20" y="28" width="5" height="8" rx="1" fill="#222"/>
+            <rect x="6" y="19" width="12" height="3" fill="#ffffff" opacity="0.3"/>
+        </svg>`,
+};
+
+// Preload car SVG images by generating them
+function preloadCarImages() {
+    return new Promise((resolve) => {
+        // Player colors: Red, Blue, Green, Yellow, plus Ghost (White)
+        const colors = ["#ff4444", "#4444ff", "#44ff44", "#ffff44", "#ffffff"];
+        const styles = Object.keys(CarSVGTemplates);
+        const totalImages = styles.length * colors.length;
+        let loadCount = 0;
+
+        styles.forEach((style) => {
+            CarImages[style] = {};
+            colors.forEach((color) => {
+                const darkColor = darkenColor(color);
+                const svgString = CarSVGTemplates[style](color, darkColor);
+                const blob = new Blob([svgString], { type: "image/svg+xml" });
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+
+                img.onload = () => {
+                    CarImages[style][color] = img;
+                    URL.revokeObjectURL(url); // Clean up memory
+                    loadCount++;
+                    if (loadCount === totalImages) {
+                        CarImages.loaded = true;
+                        resolve();
+                    }
+                };
+                img.src = url;
+            });
+        });
+    });
+}
+
+
 class Car {
     constructor(
         x,
@@ -289,8 +433,8 @@ class Car {
         const speedScale = 0.5;
         this.x = x;
         this.y = y;
-        this.width = 20;
-        this.height = 40;
+        this.width = 23;
+        this.height = 43;
         this.speed = 0;
         this.maxSpeedAsphalt = 300 * speedScale; // Fast for arcade feel
         this.tiresOnTrackRatio = 1.0;
@@ -367,11 +511,29 @@ class Car {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
+        
         const shape = this.style.shape || "roadster";
+        
+        // Try to use SVG image if loaded
+        if (CarImages.loaded && CarImages[shape] && CarImages[shape][this.color]) {
+            const img = CarImages[shape][this.color];
+            // Draw centered and scaled appropriately
+            ctx.drawImage(
+                img,
+                -this.width / 2,
+                -this.height / 2,
+                this.width,
+                this.height
+            );
+            ctx.restore();
+            return;
+        }
+        
+        // Fallback to procedural drawing if images not loaded
         const bodyWidth = this.width + (this.style.bodyWidthDelta || 0);
         const bodyHeight = this.height + (this.style.bodyHeightDelta || 0);
         const roofColor =
-            this.style.roofColor || this.getDarkerColor(this.color);
+            this.style.roofColor || darkenColor(this.color);
         const windowColor = this.style.windowColor || "#87ceeb";
 
         let drawWidth = bodyWidth;
@@ -933,7 +1095,7 @@ class Track {
                 }
                 case 1: {
                     // Hairpin: tight, sharp turn
-                    const start = 11;
+                    const start = 7;
                     [-260, -340, -260].forEach((offset, i) =>
                         applyLateralOffset(start + i, offset)
                     );
@@ -1376,6 +1538,10 @@ class Game {
                         soundManager.stopMusic();
                         soundManager.stopEngineSound();
                         soundManager.playWin();
+
+                        // Show finish button
+                        document.getElementById("finishBackBtn").style.display = "block";
+                        document.getElementById("backBtn").style.display = "none";
                     }
                 }
             }
@@ -1699,8 +1865,10 @@ class Game {
         this.ghostCar.y = sample.y;
         this.ghostCar.angle = sample.angle;
 
+        // Draw ghost with desaturation
         this.ctx.save();
-        this.ctx.globalAlpha = 0.45;
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.filter = 'grayscale(70%) brightness(1.1)';
         this.ghostCar.draw(this.ctx);
         this.ctx.restore();
     }
@@ -2025,13 +2193,6 @@ class Game {
             this.canvas.height / 2
         );
 
-        this.ctx.font = "24px Arial";
-        this.ctx.fillText(
-            "Press any key to return to menu",
-            this.canvas.width / 2,
-            this.canvas.height / 2 + 50
-        );
-
         this.ctx.textAlign = "left";
     }
 
@@ -2106,6 +2267,7 @@ function initMenu() {
     const settingsScreen = document.getElementById("settingsScreen");
     const gameCanvas = document.getElementById("gameCanvas");
     const backBtn = document.getElementById("backBtn");
+    const finishBackBtn = document.getElementById("finishBackBtn");
     const startBtn = document.getElementById("startBtn");
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsBackBtn = document.getElementById("settingsBackBtn");
@@ -2203,6 +2365,7 @@ function initMenu() {
         settingsScreen.style.display = "none";
         gameCanvas.style.display = "block";
         backBtn.style.display = "block";
+        finishBackBtn.style.display = "none";
 
         // Initialize audio on user interaction (required by browsers)
         soundManager.init();
@@ -2231,15 +2394,18 @@ function initMenu() {
         menuScreen.style.display = "flex";
         gameCanvas.style.display = "none";
         backBtn.style.display = "none";
+        finishBackBtn.style.display = "none";
     });
 
-    // Return to menu on any key after winner
-    document.addEventListener("keydown", (e) => {
-        if (currentGame && currentGame.winner) {
-            backBtn.click();
-        }
+    finishBackBtn.addEventListener("click", () => {
+        backBtn.click();
     });
+
 }
 
 // Initialize when page loads
-document.addEventListener("DOMContentLoaded", initMenu);
+document.addEventListener("DOMContentLoaded", async () => {
+    // Preload car images
+    await preloadCarImages();
+    initMenu();
+});
