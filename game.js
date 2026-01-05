@@ -375,6 +375,14 @@ class GamepadManager {
 // Global gamepad manager
 const gamepadManager = new GamepadManager();
 
+const touchControlsState = {
+    enabled: false,
+    left: false,
+    right: false,
+    accel: false,
+    brake: false,
+};
+
 
 // Car Images - SVG cartoon cars
 // Structure: CarImages[style][colorHex] = ImageObject
@@ -1653,19 +1661,26 @@ class Game {
             } else {
                 // Keyboard input
                 const keyMap = this.keyMaps[index];
-                const steerInput =
-                    (this.keys[keyMap.right] ? 1 : 0) -
-                    (this.keys[keyMap.left] ? 1 : 0);
+                const useTouch = index === 0 && touchControlsState.enabled;
+                const rightPressed =
+                    this.keys[keyMap.right] || (useTouch && touchControlsState.right);
+                const leftPressed =
+                    this.keys[keyMap.left] || (useTouch && touchControlsState.left);
+                const accelPressed =
+                    this.keys[keyMap.up] || (useTouch && touchControlsState.accel);
+                const brakePressed =
+                    this.keys[keyMap.down] || (useTouch && touchControlsState.brake);
+                const steerInput = (rightPressed ? 1 : 0) - (leftPressed ? 1 : 0);
                 car.steerInput = steerInput;
 
-                if (this.keys[keyMap.up]) {
+                if (accelPressed) {
                     car.speed = Math.min(
                         car.speed + car.acceleration,
                         car.getCurrentMaxSpeed()
                     );
                 }
 
-                if (this.keys[keyMap.down]) {
+                if (brakePressed) {
                     car.speed = Math.max(
                         car.speed - car.acceleration,
                         -car.getCurrentMaxSpeed() * 0.5
@@ -2521,6 +2536,13 @@ function initMenu() {
     const nextTrackBtn = document.getElementById("nextTrack");
     const trackNumberEl = document.getElementById("trackNumber");
     const trackNameEl = document.getElementById("trackName");
+    const mobileControls = document.getElementById("mobileControls");
+    const touchButtons = {
+        left: mobileControls?.querySelector("[data-action='left']"),
+        right: mobileControls?.querySelector("[data-action='right']"),
+        accel: mobileControls?.querySelector("[data-action='accel']"),
+        brake: mobileControls?.querySelector("[data-action='brake']"),
+    };
 
     const controlsData = [
         { player: "Player 1", keys: "↑ ↓ ← →" },
@@ -2531,6 +2553,57 @@ function initMenu() {
 
     // Controller configuration: null = keyboard, number = gamepad index
     const playerControllerConfig = [null, null, null, null];
+
+    const isTouchDevice = () =>
+        window.matchMedia("(pointer: coarse)").matches ||
+        navigator.maxTouchPoints > 0;
+
+    function setTouchState(action, isActive) {
+        touchControlsState[action] = isActive;
+        const button = touchButtons[action];
+        if (button) {
+            button.classList.toggle("pressed", isActive);
+        }
+    }
+
+    function resetTouchControls() {
+        Object.keys(touchButtons).forEach((action) => {
+            setTouchState(action, false);
+        });
+    }
+
+    function setTouchControlsEnabled(enabled) {
+        touchControlsState.enabled = enabled;
+        if (mobileControls) {
+            mobileControls.style.display = enabled ? "flex" : "none";
+        }
+        if (!enabled) {
+            resetTouchControls();
+        }
+    }
+
+    function bindTouchButton(button, action) {
+        if (!button) return;
+        const handleDown = (event) => {
+            event.preventDefault();
+            button.setPointerCapture(event.pointerId);
+            setTouchState(action, true);
+        };
+        const handleUp = (event) => {
+            event.preventDefault();
+            setTouchState(action, false);
+        };
+        button.addEventListener("pointerdown", handleDown);
+        button.addEventListener("pointerup", handleUp);
+        button.addEventListener("pointercancel", handleUp);
+        button.addEventListener("pointerout", handleUp);
+        button.addEventListener("pointerleave", handleUp);
+    }
+
+    bindTouchButton(touchButtons.left, "left");
+    bindTouchButton(touchButtons.right, "right");
+    bindTouchButton(touchButtons.accel, "accel");
+    bindTouchButton(touchButtons.brake, "brake");
     
     // Track which gamepad indices are already assigned
     function getAvailableGamepads() {
@@ -2655,6 +2728,7 @@ function initMenu() {
         gameCanvas.style.display = "block";
         backBtn.style.display = "block";
         finishBackBtn.style.display = "none";
+        setTouchControlsEnabled(isTouchDevice());
 
         // Initialize audio on user interaction (required by browsers)
         soundManager.init();
@@ -2685,6 +2759,7 @@ function initMenu() {
         gameCanvas.style.display = "none";
         backBtn.style.display = "none";
         finishBackBtn.style.display = "none";
+        setTouchControlsEnabled(false);
     });
 
     finishBackBtn.addEventListener("click", () => {
