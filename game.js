@@ -584,27 +584,28 @@ class Car {
         return Math.max(this.width, this.height) * 0.45;
     }
 
-    update() {
-        this.x += Math.cos(this.angle - Math.PI / 2) * this.speed;
-        this.y += Math.sin(this.angle - Math.PI / 2) * this.speed;
+    update(dtScale) {
+        this.x += Math.cos(this.angle - Math.PI / 2) * this.speed * dtScale;
+        this.y += Math.sin(this.angle - Math.PI / 2) * this.speed * dtScale;
 
         const grassFriction = 0.82;
         const asphaltFriction = 0.95;
         const frictionBlend =
             asphaltFriction * this.tiresOnTrackRatio +
             grassFriction * (1.0 - this.tiresOnTrackRatio);
-        this.speed *= frictionBlend;
+        this.speed *= Math.pow(frictionBlend, dtScale);
 
         const speedRatio = this.getSpeedRatio();
         const steerFactor = Math.max(0.6, 1.2 - speedRatio * 0.6);
         const tractionFactor = 0.6 + 0.4 * this.tiresOnTrackRatio;
         const targetTurn =
             this.steerInput * this.maxTurnSpeed * steerFactor * tractionFactor;
-        this.turnSpeed += (targetTurn - this.turnSpeed) * 0.25;
+        const turnLerp = 1 - Math.pow(1 - 0.25, dtScale);
+        this.turnSpeed += (targetTurn - this.turnSpeed) * turnLerp;
 
         const direction = this.speed < -0.5 ? -1 : 1;
         const turnScale = 0.35 + speedRatio * 0.75;
-        this.angle += this.turnSpeed * 0.02 * direction * turnScale;
+        this.angle += this.turnSpeed * 0.02 * direction * turnScale * dtScale;
 
         this.currentLapTime = Date.now() - this.lapStartTime;
     }
@@ -1630,11 +1631,12 @@ class Game {
         });
     }
 
-    handleInput() {
+    handleInput(dtScale) {
         if (this.countdownActive) return;
 
         this.cars.forEach((car, index) => {
             const gamepadIndex = this.controllerConfig[index];
+            const accelStep = car.acceleration * dtScale;
             
             // Check if this player is using a controller
             if (gamepadIndex !== null && gamepadIndex !== undefined) {
@@ -1647,14 +1649,14 @@ class Game {
                 
                 if (accelInput > 0.1) {
                     car.speed = Math.min(
-                        car.speed + car.acceleration * accelInput,
+                        car.speed + accelStep * accelInput,
                         car.getCurrentMaxSpeed()
                     );
                 }
                 
                 if (brakeInput > 0.1) {
                     car.speed = Math.max(
-                        car.speed - car.acceleration * brakeInput,
+                        car.speed - accelStep * brakeInput,
                         -car.getCurrentMaxSpeed() * 0.5
                     );
                 }
@@ -1675,14 +1677,14 @@ class Game {
 
                 if (accelPressed) {
                     car.speed = Math.min(
-                        car.speed + car.acceleration,
+                        car.speed + accelStep,
                         car.getCurrentMaxSpeed()
                     );
                 }
 
                 if (brakePressed) {
                     car.speed = Math.max(
-                        car.speed - car.acceleration,
+                        car.speed - accelStep,
                         -car.getCurrentMaxSpeed() * 0.5
                     );
                 }
@@ -1767,7 +1769,7 @@ class Game {
         }
     }
 
-    update() {
+    update(dtScale) {
         if (this.winner) return;
         if (this.countdownActive) {
             this.cars.forEach((car) => {
@@ -1776,11 +1778,11 @@ class Game {
             return;
         }
 
-        this.handleInput();
+        this.handleInput(dtScale);
 
         this.cars.forEach((car, index) => {
             car.tiresOnTrackRatio = this.track.checkCarOnTrack(car);
-            car.update();
+            car.update(dtScale);
             this.checkCheckpoint(car);
             this.recordLapSample(car, index);
             this.checkLapCompletion(car, index);
@@ -1794,7 +1796,7 @@ class Game {
                 const maxBoostSpeed =
                     car.getCurrentMaxSpeed() * this.slipstreamMaxFactor;
                 car.speed = Math.min(
-                    car.speed + this.slipstreamBoostAccel,
+                    car.speed + this.slipstreamBoostAccel * dtScale,
                     maxBoostSpeed
                 );
             }
@@ -2482,6 +2484,7 @@ class Game {
 
     start() {
         this.running = true;
+        this.lastFrameTime = null;
         this.startCountdown();
         this.gameLoop();
     }
@@ -2490,12 +2493,19 @@ class Game {
         this.running = false;
     }
 
-    gameLoop() {
+    gameLoop(timestamp) {
         if (!this.running) return;
 
-        this.update();
+        if (!this.lastFrameTime) {
+            this.lastFrameTime = timestamp || performance.now();
+        }
+        const now = timestamp || performance.now();
+        const deltaMs = Math.min(100, now - this.lastFrameTime);
+        const dtScale = deltaMs / (1000 / 60);
+        this.lastFrameTime = now;
+        this.update(dtScale);
         this.draw();
-        requestAnimationFrame(() => this.gameLoop());
+        requestAnimationFrame((t) => this.gameLoop(t));
     }
 }
 
