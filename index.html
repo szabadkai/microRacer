@@ -524,6 +524,124 @@
             background: linear-gradient(180deg, #fff 0%, #ddd 100%);
         }
 
+        /* Leaderboard Screen */
+        #leaderboardScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            padding: 2rem;
+            min-width: 340px;
+            background: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
+            border: 4px solid #ff6600;
+            box-shadow:
+                0 0 40px rgba(255, 102, 0, 0.4),
+                inset 0 0 60px rgba(255, 102, 0, 0.05),
+                0 0 0 8px #0a0a0a,
+                0 0 0 12px #333;
+        }
+
+        #leaderboardScreen h2 {
+            font-family: 'Press Start 2P', monospace;
+            color: #ff6600;
+            font-size: 0.85rem;
+            text-shadow: 0 0 15px rgba(255, 102, 0, 0.5);
+            letter-spacing: 2px;
+        }
+
+        .leaderboard-track {
+            font-family: 'Press Start 2P', monospace;
+            color: #ffcc00;
+            font-size: 0.55rem;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        .leaderboard-note {
+            font-family: 'Orbitron', sans-serif;
+            color: #666;
+            font-size: 0.6rem;
+            letter-spacing: 1px;
+            text-align: center;
+            margin-top: -0.25rem;
+        }
+
+        .leaderboard-list {
+            width: 100%;
+            max-height: min(50vh, 360px);
+            overflow: auto;
+            padding: 0;
+            margin: 0;
+            list-style: none;
+            border: 1px solid #333;
+            background: linear-gradient(180deg, #141414 0%, #101010 100%);
+        }
+
+        .leaderboard-item {
+            display: grid;
+            grid-template-columns: 36px 1fr auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.65rem 0.75rem;
+            border-bottom: 1px solid #222;
+            color: #ddd;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+        }
+
+        .leaderboard-item:last-child {
+            border-bottom: none;
+        }
+
+        .leaderboard-rank {
+            font-family: 'Press Start 2P', monospace;
+            color: #888;
+            font-size: 0.55rem;
+            text-align: right;
+        }
+
+        .leaderboard-time {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.6rem;
+            color: #ffffff;
+            letter-spacing: 1px;
+        }
+
+        .leaderboard-meta {
+            font-size: 0.65rem;
+            color: #888;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .leaderboard-item.rank-1 .leaderboard-time {
+            color: #ffd166;
+            text-shadow: 0 0 12px rgba(255, 209, 102, 0.35);
+        }
+
+        .leaderboard-empty {
+            padding: 1rem;
+            color: #777;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+
+        .leaderboard-actions {
+            display: flex;
+            gap: 0.6rem;
+        }
+
+        .danger-btn {
+            border-color: #aa3333;
+            color: #ff9b9b;
+        }
+
+        .danger-btn:hover {
+            border-color: #ff5555;
+            color: #ffffff;
+        }
+
         /* Back button during game */
         #backBtn {
             position: fixed;
@@ -695,6 +813,7 @@
 
             <button class="start-btn" id="startBtn">Start Race</button>
             <button class="secondary-btn" id="settingsBtn">Settings</button>
+            <button class="secondary-btn" id="leaderboardBtn">Leaderboard</button>
 
             <p class="controls-hint" id="controlsHint">Click to toggle controller</p>
             <div class="controls-info" id="controlsInfo">
@@ -723,6 +842,18 @@
                 </div>
             </div>
             <button class="secondary-btn" id="settingsBackBtn">Back</button>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div id="leaderboardScreen">
+            <h2>Track Records</h2>
+            <div class="leaderboard-track" id="leaderboardTrackName">Breakfast Table</div>
+            <div class="leaderboard-note">Stored locally on this device</div>
+            <ul class="leaderboard-list" id="leaderboardList"></ul>
+            <div class="leaderboard-actions">
+                <button class="secondary-btn danger-btn" id="leaderboardClearBtn">Clear</button>
+                <button class="secondary-btn" id="leaderboardBackBtn">Back</button>
+            </div>
         </div>
 
         <!-- Game Canvas -->

@@ -9,6 +9,7 @@ class SoundManager {
         this.sfxGain = null;
         this.engineOscillators = [];
         this.musicInterval = null;
+        this.lastCrashTime = 0;
     }
 
     init() {
@@ -81,6 +82,30 @@ class SoundManager {
         [523, 659, 784, 1047].forEach((freq, i) => {
             setTimeout(() => this.beep(freq, 0.15, "square"), i * 80);
         });
+    }
+
+    playNewRecord() {
+        if (!this.initialized || !this.sfxEnabled) return;
+
+        // Short celebratory riff
+        const notes = [784, 988, 1175, 1568];
+        notes.forEach((freq, i) => {
+            setTimeout(() => this.beep(freq, 0.12, "square"), i * 90);
+        });
+    }
+
+    playCrash(intensity = 1) {
+        if (!this.initialized || !this.sfxEnabled) return;
+
+        const now = performance.now();
+        if (now - this.lastCrashTime < 90) return;
+        this.lastCrashTime = now;
+
+        const clamped = Math.max(0, Math.min(intensity, 1));
+        const base = 90 + clamped * 160;
+        const dur = 0.06 + clamped * 0.08;
+        this.beep(base, dur, "sawtooth");
+        setTimeout(() => this.beep(base * 0.55, dur * 0.85, "square"), 25);
     }
 
     // Win fanfare
@@ -258,6 +283,8 @@ class SoundManager {
 const soundManager = new SoundManager();
 
 const SETTINGS_KEY = "microRacer.settings";
+const LEADERBOARD_KEY_PREFIX = "microRacer.leaderboard.";
+const LEADERBOARD_LIMIT = 10;
 const defaultSettings = {
     ghostEnabled: true,
     musicEnabled: true,
@@ -275,6 +302,84 @@ function loadSettings() {
 
 function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function formatTime(milliseconds) {
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor((milliseconds % 60000) / 1000);
+    const ms = Math.floor((milliseconds % 1000) / 10);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}.${ms
+        .toString()
+        .padStart(2, "0")}`;
+}
+
+function getLeaderboardStorageKey(trackIndex) {
+    return `${LEADERBOARD_KEY_PREFIX}${trackIndex}`;
+}
+
+function loadLeaderboard(trackIndex) {
+    try {
+        const stored = JSON.parse(
+            localStorage.getItem(getLeaderboardStorageKey(trackIndex))
+        );
+        if (!Array.isArray(stored)) return [];
+        return stored
+            .filter((entry) => entry && typeof entry.time === "number")
+            .map((entry) => ({
+                time: entry.time,
+                playerIndex:
+                    typeof entry.playerIndex === "number"
+                        ? entry.playerIndex
+                        : null,
+                playerCount:
+                    typeof entry.playerCount === "number"
+                        ? entry.playerCount
+                        : null,
+                timestamp:
+                    typeof entry.timestamp === "number"
+                        ? entry.timestamp
+                        : Date.now(),
+            }))
+            .sort((a, b) => (a.time - b.time) || (a.timestamp - b.timestamp))
+            .slice(0, LEADERBOARD_LIMIT);
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveLeaderboard(trackIndex, entries) {
+    localStorage.setItem(
+        getLeaderboardStorageKey(trackIndex),
+        JSON.stringify(entries)
+    );
+}
+
+function clearLeaderboard(trackIndex) {
+    localStorage.removeItem(getLeaderboardStorageKey(trackIndex));
+}
+
+function addLeaderboardEntry(trackIndex, entry) {
+    const existing = loadLeaderboard(trackIndex);
+    const next = [...existing, entry]
+        .sort((a, b) => (a.time - b.time) || (a.timestamp - b.timestamp))
+        .slice(0, LEADERBOARD_LIMIT);
+
+    let rank = null;
+    for (let i = 0; i < next.length; i++) {
+        const candidate = next[i];
+        if (
+            candidate.time === entry.time &&
+            candidate.timestamp === entry.timestamp &&
+            candidate.playerIndex === entry.playerIndex &&
+            candidate.playerCount === entry.playerCount
+        ) {
+            rank = i + 1;
+            break;
+        }
+    }
+
+    saveLeaderboard(trackIndex, next);
+    return { entries: next, rank };
 }
 
 // Gamepad Manager for controller support
@@ -569,6 +674,13 @@ class Car {
         this.currentLapTime = 0;
         this.bestLapTime = null;
         this.slipstreamEndTime = 0;
+
+        // HUD + effects
+        this.hudMessage = "";
+        this.hudMessageEndTime = 0;
+        this.cameraShakeEndTime = 0;
+        this.cameraShakeStrength = 0;
+        this.lastSkidPositions = null;
     }
 
     getSpeedKmh() {
@@ -1435,6 +1547,11 @@ class Game {
         this.trackTheme = this.track.getTheme();
         this.patternCache = new Map();
         this.cars = [];
+        this.skidMarks = [];
+        this.skidMarkMaxAgeMs = 6500;
+        this.maxSkidMarks = 1600;
+        this.particles = [];
+        this.maxParticles = 180;
         this.keys = {};
         this.running = false;
         this.winner = null;
@@ -1443,6 +1560,7 @@ class Game {
         this.lapSamples = Array.from({ length: this.playerCount }, () => []);
         this.lastSampleTimes = Array(this.playerCount).fill(0);
         this.bestLap = this.loadBestLap();
+        this.leaderboard = loadLeaderboard(this.trackIndex);
         this.ghostSamples = this.bestLap ? this.bestLap.samples : null;
         this.ghostLapTime = this.bestLap ? this.bestLap.time : null;
         this.ghostStartTime = Date.now();
@@ -1719,6 +1837,22 @@ class Game {
                     // Play lap completion sound
                     soundManager.playLapComplete();
 
+                    const lapTimestamp = Date.now();
+                    const { entries, rank } = addLeaderboardEntry(this.trackIndex, {
+                        time: car.currentLapTime,
+                        playerIndex: car.playerIndex,
+                        playerCount: this.playerCount,
+                        timestamp: lapTimestamp,
+                    });
+                    this.leaderboard = entries;
+                    if (rank) {
+                        car.hudMessage = rank === 1 ? "NEW RECORD!" : `TOP ${rank}`;
+                        car.hudMessageEndTime = lapTimestamp + 1400;
+                        if (rank === 1) {
+                            soundManager.playNewRecord();
+                        }
+                    }
+
                     this.lapSamples[index].push({
                         t: car.currentLapTime,
                         x: car.x,
@@ -1769,6 +1903,216 @@ class Game {
         }
     }
 
+    getTireWorldPosition(car, offsetX, offsetY) {
+        const cos = Math.cos(car.angle);
+        const sin = Math.sin(car.angle);
+        return {
+            x: car.x + offsetX * cos - offsetY * sin,
+            y: car.y + offsetX * sin + offsetY * cos,
+        };
+    }
+
+    getRearTirePositions(car) {
+        return {
+            left: this.getTireWorldPosition(car, -8, 15),
+            right: this.getTireWorldPosition(car, 8, 15),
+        };
+    }
+
+    addSkidMarkSegment(from, to, timestamp) {
+        this.skidMarks.push({
+            x1: from.x,
+            y1: from.y,
+            x2: to.x,
+            y2: to.y,
+            timestamp,
+        });
+
+        if (this.skidMarks.length > this.maxSkidMarks) {
+            this.skidMarks.splice(0, this.skidMarks.length - this.maxSkidMarks);
+        }
+    }
+
+    updateSkidMarks(now) {
+        const minSpeedRatio = 0.45;
+        const minTurn = 1.1;
+        const minOnTrack = 0.85;
+
+        this.cars.forEach((car) => {
+            const isSkidding =
+                car.tiresOnTrackRatio >= minOnTrack &&
+                car.getSpeedRatio() >= minSpeedRatio &&
+                Math.abs(car.turnSpeed) >= minTurn &&
+                Math.abs(car.steerInput) > 0.2;
+
+            if (!isSkidding) {
+                car.lastSkidPositions = null;
+                return;
+            }
+
+            const rear = this.getRearTirePositions(car);
+            if (car.lastSkidPositions) {
+                this.addSkidMarkSegment(car.lastSkidPositions.left, rear.left, now);
+                this.addSkidMarkSegment(car.lastSkidPositions.right, rear.right, now);
+            }
+            car.lastSkidPositions = rear;
+        });
+
+        const cutoff = now - this.skidMarkMaxAgeMs;
+        let firstValid = 0;
+        while (
+            firstValid < this.skidMarks.length &&
+            this.skidMarks[firstValid].timestamp < cutoff
+        ) {
+            firstValid++;
+        }
+        if (firstValid > 0) {
+            this.skidMarks.splice(0, firstValid);
+        }
+    }
+
+    drawSkidMarks(camera, viewport, now) {
+        if (this.skidMarks.length === 0) return;
+
+        const viewLeft = camera.x - 120;
+        const viewRight = camera.x + viewport.width + 120;
+        const viewTop = camera.y - 120;
+        const viewBottom = camera.y + viewport.height + 120;
+
+        this.ctx.save();
+        this.ctx.strokeStyle = "#000000";
+        this.ctx.lineWidth = 2;
+        this.ctx.lineCap = "round";
+
+        for (const mark of this.skidMarks) {
+            if (
+                (mark.x1 < viewLeft && mark.x2 < viewLeft) ||
+                (mark.x1 > viewRight && mark.x2 > viewRight) ||
+                (mark.y1 < viewTop && mark.y2 < viewTop) ||
+                (mark.y1 > viewBottom && mark.y2 > viewBottom)
+            ) {
+                continue;
+            }
+
+            const age = now - mark.timestamp;
+            const alpha = Math.max(0, 1 - age / this.skidMarkMaxAgeMs);
+            this.ctx.globalAlpha = 0.28 * alpha;
+            this.ctx.beginPath();
+            this.ctx.moveTo(mark.x1, mark.y1);
+            this.ctx.lineTo(mark.x2, mark.y2);
+            this.ctx.stroke();
+        }
+
+        this.ctx.restore();
+    }
+
+    spawnSparks(x, y, nx, ny, intensity) {
+        const clamped = Math.max(0, Math.min(intensity, 1));
+        const count = Math.round(3 + clamped * 8);
+        const speed = 2.2 + clamped * 7.5;
+
+        for (let i = 0; i < count; i++) {
+            const spread = (Math.random() * 2 - 1) * Math.PI * 0.7;
+            const angle = Math.atan2(ny, nx) + Math.PI + spread;
+            const v = speed * (0.7 + Math.random() * 0.6);
+            const vx = Math.cos(angle) * v;
+            const vy = Math.sin(angle) * v;
+            const lifeMs = 260 + Math.random() * 240;
+            this.particles.push({
+                x,
+                y,
+                vx,
+                vy,
+                lifeMs,
+                maxLifeMs: lifeMs,
+                size: 1.2 + Math.random() * 1.6,
+                color: Math.random() < 0.25 ? "#ffd166" : "#ffffff",
+            });
+        }
+
+        if (this.particles.length > this.maxParticles) {
+            this.particles.splice(0, this.particles.length - this.maxParticles);
+        }
+    }
+
+    updateParticles(dtScale, deltaMs) {
+        if (this.particles.length === 0) return;
+
+        const friction = Math.pow(0.86, dtScale);
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.x += p.vx * dtScale;
+            p.y += p.vy * dtScale;
+            p.vx *= friction;
+            p.vy *= friction;
+            p.lifeMs -= deltaMs;
+            if (p.lifeMs <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+    }
+
+    drawParticles(camera, viewport) {
+        if (this.particles.length === 0) return;
+
+        const viewLeft = camera.x - 160;
+        const viewRight = camera.x + viewport.width + 160;
+        const viewTop = camera.y - 160;
+        const viewBottom = camera.y + viewport.height + 160;
+
+        this.ctx.save();
+        for (const p of this.particles) {
+            if (
+                p.x < viewLeft ||
+                p.x > viewRight ||
+                p.y < viewTop ||
+                p.y > viewBottom
+            ) {
+                continue;
+            }
+
+            const alpha = Math.max(0, p.lifeMs / p.maxLifeMs);
+            this.ctx.globalAlpha = 0.85 * alpha;
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        this.ctx.restore();
+    }
+
+    drawSlipstreamTrails(now) {
+        this.ctx.save();
+        this.ctx.strokeStyle = "#4fd1ff";
+        this.ctx.lineWidth = 2;
+        this.ctx.lineCap = "round";
+
+        this.cars.forEach((car) => {
+            if (now >= car.slipstreamEndTime || car.speed <= 0) return;
+
+            const fx = Math.cos(car.angle - Math.PI / 2);
+            const fy = Math.sin(car.angle - Math.PI / 2);
+            const rx = Math.cos(car.angle);
+            const ry = Math.sin(car.angle);
+            const length = 20 + car.getSpeedRatio() * 30;
+            const offsets = [-6, 0, 6];
+
+            offsets.forEach((o) => {
+                const sx = car.x + rx * o - fx * 6;
+                const sy = car.y + ry * o - fy * 6;
+                const ex = sx - fx * length;
+                const ey = sy - fy * length;
+                this.ctx.globalAlpha = 0.22 + Math.random() * 0.18;
+                this.ctx.beginPath();
+                this.ctx.moveTo(sx, sy);
+                this.ctx.lineTo(ex, ey);
+                this.ctx.stroke();
+            });
+        });
+
+        this.ctx.restore();
+    }
+
     update(dtScale) {
         if (this.winner) return;
         if (this.countdownActive) {
@@ -1777,6 +2121,9 @@ class Game {
             });
             return;
         }
+
+        const now = Date.now();
+        const deltaMs = dtScale * (1000 / 60);
 
         this.handleInput(dtScale);
 
@@ -1788,9 +2135,9 @@ class Game {
             this.checkLapCompletion(car, index);
         });
 
-        this.applySlipstream();
+        this.updateSkidMarks(now);
+        this.applySlipstream(now);
 
-        const now = Date.now();
         this.cars.forEach((car) => {
             if (now < car.slipstreamEndTime && car.speed > 0) {
                 const maxBoostSpeed =
@@ -1802,7 +2149,8 @@ class Game {
             }
         });
 
-        this.resolveCarCollisions();
+        this.resolveCarCollisions(now);
+        this.updateParticles(dtScale, deltaMs);
 
         // Update engine sound based on car speed
         soundManager.updateEngineSound(this.cars);
@@ -1838,6 +2186,7 @@ class Game {
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        const now = Date.now();
 
         // Draw each player's viewport
         this.cars.forEach((car, index) => {
@@ -1855,10 +2204,20 @@ class Game {
             );
             this.ctx.clip();
 
+            let shakeX = 0;
+            let shakeY = 0;
+            if (now < car.cameraShakeEndTime && car.cameraShakeStrength > 0) {
+                const remaining = Math.max(0, car.cameraShakeEndTime - now);
+                const t = Math.min(remaining / 140, 1);
+                const strength = car.cameraShakeStrength * t;
+                shakeX = (Math.random() * 2 - 1) * strength;
+                shakeY = (Math.random() * 2 - 1) * strength;
+            }
+
             // Calculate camera position centered on this car
             const camera = {
-                x: car.x - viewport.width / 2,
-                y: car.y - viewport.height / 2,
+                x: car.x - viewport.width / 2 + shakeX,
+                y: car.y - viewport.height / 2 + shakeY,
             };
 
             // Translate to viewport position then apply camera offset
@@ -1869,11 +2228,17 @@ class Game {
             // Draw track
             this.drawTrack();
 
+            this.drawSkidMarks(camera, viewport, now);
+
             // Draw ghost lap
             this.drawGhost();
 
+            this.drawSlipstreamTrails(now);
+
             // Draw all cars
             this.cars.forEach((c) => c.draw(this.ctx));
+
+            this.drawParticles(camera, viewport);
 
             // Draw finish line and checkpoint
             this.drawFinishLine();
@@ -2315,33 +2680,65 @@ class Game {
         const padding = 10;
         const x = viewport.x + padding;
         const y = viewport.y + padding;
+        const now = Date.now();
+        const boxW = 180;
+        const boxH = 98;
 
         // TrackMania-style clean HUD
         this.ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        this.ctx.fillRect(x, y, 140, 70);
+        this.ctx.fillRect(x, y, boxW, boxH);
 
         // Player label with color
         this.ctx.fillStyle = car.color;
         this.ctx.font = "bold 12px Arial";
         this.ctx.fillText(`P${car.playerIndex + 1}`, x + 10, y + 16);
 
+        if (now < car.slipstreamEndTime && car.speed > 0) {
+            this.ctx.fillStyle = "#4fd1ff";
+            this.ctx.font = "bold 10px Arial";
+            this.ctx.fillText("DRAFT", x + 42, y + 16);
+        }
+
         // Lap counter
         this.ctx.fillStyle = "#ffffff";
         this.ctx.font = "12px Arial";
-        this.ctx.fillText(`${car.lap}/${this.lapsToWin}`, x + 100, y + 16);
+        this.ctx.textAlign = "right";
+        this.ctx.fillText(`${car.lap}/${this.lapsToWin}`, x + boxW - 10, y + 16);
 
         // Speed display (large, centered)
         this.ctx.fillStyle = "#ffffff";
         this.ctx.font = "bold 32px Arial";
         this.ctx.textAlign = "center";
-        this.ctx.fillText(`${car.getSpeedKmh()}`, x + 70, y + 48);
+        this.ctx.fillText(`${car.getSpeedKmh()}`, x + boxW / 2, y + 48);
         this.ctx.font = "10px Arial";
         this.ctx.fillStyle = "#888888";
-        this.ctx.fillText("km/h", x + 70, y + 62);
+        this.ctx.fillText("km/h", x + boxW / 2, y + 62);
+
+        // Current lap time
+        this.ctx.fillStyle = "#ffffff";
+        this.ctx.font = "10px Arial";
+        this.ctx.fillText(formatTime(car.currentLapTime), x + boxW / 2, y + 78);
+
+        // Personal best lap time (session)
+        const bestLabel = car.bestLapTime ? formatTime(car.bestLapTime) : "--:--.--";
+        this.ctx.fillStyle = "#aaaaaa";
+        this.ctx.fillText(`BEST ${bestLabel}`, x + boxW / 2, y + 92);
+
+        if (car.hudMessage && now < car.hudMessageEndTime) {
+            const remaining = Math.max(0, car.hudMessageEndTime - now);
+            const t = Math.min(remaining / 1400, 1);
+            this.ctx.save();
+            this.ctx.globalAlpha = 0.55 + t * 0.45;
+            this.ctx.fillStyle = "#ffd166";
+            this.ctx.font = "bold 12px Arial";
+            this.ctx.fillText(car.hudMessage, x + boxW / 2, y + 30);
+            this.ctx.restore();
+        }
+
         this.ctx.textAlign = "left";
     }
 
-    resolveCarCollisions() {
+    resolveCarCollisions(now) {
         const restitution = 0.5;
         const speedDamp = 0.9;
 
@@ -2382,6 +2779,40 @@ class Game {
 
                 if (velAlongNormal > 0) continue;
 
+                const impactSpeed = Math.max(0, -velAlongNormal);
+                const impactIntensity = Math.min(impactSpeed / 120, 1);
+                if (impactIntensity > 0.22) {
+                    const contactX = carA.x + nx * carA.getCollisionRadius();
+                    const contactY = carA.y + ny * carA.getCollisionRadius();
+                    this.spawnSparks(
+                        contactX,
+                        contactY,
+                        nx,
+                        ny,
+                        impactIntensity
+                    );
+                    soundManager.playCrash(impactIntensity);
+
+                    const shakeMs = 140;
+                    const shakeStrength = Math.min(6, 2 + impactIntensity * 6);
+                    carA.cameraShakeStrength = Math.max(
+                        carA.cameraShakeStrength,
+                        shakeStrength
+                    );
+                    carB.cameraShakeStrength = Math.max(
+                        carB.cameraShakeStrength,
+                        shakeStrength
+                    );
+                    carA.cameraShakeEndTime = Math.max(
+                        carA.cameraShakeEndTime,
+                        now + shakeMs
+                    );
+                    carB.cameraShakeEndTime = Math.max(
+                        carB.cameraShakeEndTime,
+                        now + shakeMs
+                    );
+                }
+
                 const impulse = (-(1 + restitution) * velAlongNormal) / 2;
                 const impulseX = impulse * nx;
                 const impulseY = impulse * ny;
@@ -2408,8 +2839,7 @@ class Game {
         }
     }
 
-    applySlipstream() {
-        const now = Date.now();
+    applySlipstream(now) {
         const minDot = Math.cos(this.slipstreamAngle);
 
         for (let i = 0; i < this.cars.length; i++) {
@@ -2439,28 +2869,64 @@ class Game {
     }
 
     drawWinnerOverlay() {
-        this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        const ctx = this.ctx;
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
 
-        this.ctx.fillStyle = "#ffffff";
-        this.ctx.font = "bold 48px Arial";
-        this.ctx.textAlign = "center";
-        this.ctx.fillText(
+        ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 48px Arial";
+        ctx.fillText(
             `🏆 Player ${this.winner.playerIndex + 1} Wins! 🏆`,
-            this.canvas.width / 2,
-            this.canvas.height / 2
+            centerX,
+            centerY - 70
         );
 
-        this.ctx.textAlign = "left";
+        const winnerBest = this.winner.bestLapTime
+            ? formatTime(this.winner.bestLapTime)
+            : "--:--.--";
+        ctx.fillStyle = "#dddddd";
+        ctx.font = "bold 18px Arial";
+        ctx.fillText(`Winner best lap: ${winnerBest}`, centerX, centerY - 38);
+
+        const records = (this.leaderboard || []).slice(0, 3);
+        if (records.length > 0) {
+            ctx.fillStyle = "#ffcc00";
+            ctx.font = "bold 20px Arial";
+            ctx.fillText("Track Records", centerX, centerY + 6);
+
+            ctx.font = "16px Arial";
+            records.forEach((entry, i) => {
+                const playerLabel =
+                    entry.playerIndex === null ? "P?" : `P${entry.playerIndex + 1}`;
+                const countLabel =
+                    typeof entry.playerCount === "number" ? `${entry.playerCount}P` : "";
+                const meta = [playerLabel, countLabel].filter(Boolean).join(" ");
+                ctx.fillStyle = i === 0 ? "#ffd166" : "#ffffff";
+                ctx.fillText(
+                    `${i + 1}. ${formatTime(entry.time)}   ${meta}`,
+                    centerX,
+                    centerY + 34 + i * 22
+                );
+            });
+
+            ctx.fillStyle = "#777777";
+            ctx.font = "12px Arial";
+            ctx.fillText(
+                "Records are saved locally on this device",
+                centerX,
+                centerY + 112
+            );
+        }
+
+        ctx.textAlign = "left";
     }
 
     formatTime(milliseconds) {
-        const minutes = Math.floor(milliseconds / 60000);
-        const seconds = Math.floor((milliseconds % 60000) / 1000);
-        const ms = Math.floor((milliseconds % 1000) / 10);
-        return `${minutes}:${seconds.toString().padStart(2, "0")}.${ms
-            .toString()
-            .padStart(2, "0")}`;
+        return formatTime(milliseconds);
     }
 
     startCountdown() {
@@ -2531,12 +2997,18 @@ const trackNames = [
 function initMenu() {
     const menuScreen = document.getElementById("menuScreen");
     const settingsScreen = document.getElementById("settingsScreen");
+    const leaderboardScreen = document.getElementById("leaderboardScreen");
     const gameCanvas = document.getElementById("gameCanvas");
     const backBtn = document.getElementById("backBtn");
     const finishBackBtn = document.getElementById("finishBackBtn");
     const startBtn = document.getElementById("startBtn");
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsBackBtn = document.getElementById("settingsBackBtn");
+    const leaderboardBtn = document.getElementById("leaderboardBtn");
+    const leaderboardBackBtn = document.getElementById("leaderboardBackBtn");
+    const leaderboardClearBtn = document.getElementById("leaderboardClearBtn");
+    const leaderboardTrackName = document.getElementById("leaderboardTrackName");
+    const leaderboardList = document.getElementById("leaderboardList");
     const ghostToggle = document.getElementById("ghostToggle");
     const musicToggle = document.getElementById("musicToggle");
     const sfxToggle = document.getElementById("sfxToggle");
@@ -2676,6 +3148,49 @@ function initMenu() {
     function updateTrackDisplay() {
         trackNumberEl.textContent = `${selectedTrack + 1}/10`;
         trackNameEl.textContent = trackNames[selectedTrack];
+        if (leaderboardTrackName) {
+            leaderboardTrackName.textContent = trackNames[selectedTrack];
+        }
+        if (leaderboardScreen && leaderboardScreen.style.display !== "none") {
+            renderLeaderboard();
+        }
+    }
+
+    function renderLeaderboard() {
+        if (!leaderboardList) return;
+        if (leaderboardTrackName) {
+            leaderboardTrackName.textContent = trackNames[selectedTrack];
+        }
+
+        const entries = loadLeaderboard(selectedTrack);
+        leaderboardList.innerHTML = "";
+
+        if (entries.length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "leaderboard-empty";
+            empty.textContent = "No laps yet — finish a lap to set records.";
+            leaderboardList.appendChild(empty);
+            return;
+        }
+
+        entries.forEach((entry, i) => {
+            const li = document.createElement("li");
+            li.className = `leaderboard-item${i === 0 ? " rank-1" : ""}`;
+
+            const playerLabel =
+                entry.playerIndex === null ? "P?" : `P${entry.playerIndex + 1}`;
+            const countLabel =
+                typeof entry.playerCount === "number" ? `${entry.playerCount}P` : "";
+            const dateLabel = new Date(entry.timestamp).toLocaleDateString();
+            const meta = [playerLabel, countLabel, dateLabel].filter(Boolean).join(" • ");
+
+            li.innerHTML = `
+                <span class="leaderboard-rank">${i + 1}</span>
+                <span class="leaderboard-time">${formatTime(entry.time)}</span>
+                <span class="leaderboard-meta">${meta}</span>
+            `;
+            leaderboardList.appendChild(li);
+        });
     }
 
     ghostToggle.checked = gameSettings.ghostEnabled;
@@ -2703,12 +3218,33 @@ function initMenu() {
 
     settingsBtn.addEventListener("click", () => {
         menuScreen.style.display = "none";
+        if (leaderboardScreen) leaderboardScreen.style.display = "none";
         settingsScreen.style.display = "flex";
     });
 
     settingsBackBtn.addEventListener("click", () => {
         settingsScreen.style.display = "none";
+        if (leaderboardScreen) leaderboardScreen.style.display = "none";
         menuScreen.style.display = "flex";
+    });
+
+    leaderboardBtn.addEventListener("click", () => {
+        menuScreen.style.display = "none";
+        settingsScreen.style.display = "none";
+        if (leaderboardScreen) leaderboardScreen.style.display = "flex";
+        renderLeaderboard();
+    });
+
+    leaderboardBackBtn.addEventListener("click", () => {
+        if (leaderboardScreen) leaderboardScreen.style.display = "none";
+        settingsScreen.style.display = "none";
+        menuScreen.style.display = "flex";
+    });
+
+    leaderboardClearBtn.addEventListener("click", () => {
+        if (!confirm("Clear records for this track?")) return;
+        clearLeaderboard(selectedTrack);
+        renderLeaderboard();
     });
 
     ghostToggle.addEventListener("change", () => {
@@ -2765,6 +3301,7 @@ function initMenu() {
         soundManager.stopEngineSound();
 
         settingsScreen.style.display = "none";
+        if (leaderboardScreen) leaderboardScreen.style.display = "none";
         menuScreen.style.display = "flex";
         gameCanvas.style.display = "none";
         backBtn.style.display = "none";
